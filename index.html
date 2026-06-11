@@ -33,6 +33,7 @@
             color: var(--text-main);
             line-height: 1.6;
             padding: 20px;
+            position: relative;
         }
 
         .container {
@@ -89,6 +90,7 @@
         /* テーブルスタイル */
         .table-responsive {
             overflow-x: auto;
+            /* 縦方向の隠れを防ぐためoverflow-yは指定しない。ただし固定配置サジェストを使うため影響なし */
         }
 
         table {
@@ -138,6 +140,50 @@
             background-color: #f1f5f9;
             color: #94a3b8;
             cursor: not-allowed;
+        }
+
+        /* 薬価固定時の読み取り専用スタイル */
+        input:read-only {
+            background-color: #f8fafc;
+            color: #4b5563;
+            border-color: #cbd5e1;
+            cursor: not-allowed;
+        }
+
+        /* グローバル・サジェストボックス（最前面に浮き上がらせる） */
+        .suggest-box {
+            position: absolute;
+            z-index: 9999;
+            background-color: white;
+            border: 1px solid #b91c1c; /* 識別しやすく、かつきれいに */
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            max-height: 260px; /* 5-6件が完全に入る高さ */
+            overflow-y: auto;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            display: none;
+        }
+        
+        .suggest-item {
+            padding: 10px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 10pt;
+            transition: background-color 0.1s;
+        }
+        
+        .suggest-item:last-child {
+            border-bottom: none;
+        }
+        
+        .suggest-item:hover {
+            background-color: var(--primary-light);
+        }
+        
+        .suggest-item-prices {
+            font-size: 8.5pt;
+            color: var(--text-muted);
+            margin-top: 2px;
         }
 
         /* ボタン */
@@ -301,13 +347,13 @@
             <table>
                 <thead>
                     <tr>
-                        <th style="width: 18%;">薬剤名（任意）</th>
-                        <th style="width: 12%;">区分</th>
-                        <th style="width: 15%;">先発薬 価格 <span class="label-unit">(円)</span></th>
-                        <th style="width: 15%;">後発薬 最高価格 <span class="label-unit">(円)</span></th>
-                        <th style="width: 14%;">1日量 <span class="label-unit">(内服のみ)</span></th>
+                        <th style="width: 22%;">薬剤名（品名検索）</th>
+                        <th style="width: 10%;">区分</th>
+                        <th style="width: 14%;">先発薬 価格 <span class="label-unit">(円)</span></th>
+                        <th style="width: 14%;">後発薬 最高価格 <span class="label-unit">(円)</span></th>
+                        <th style="width: 12%;">1日量 <span class="label-unit">(内服のみ)</span></th>
                         <th style="width: 14%;">日数 / 全数量</th>
-                        <th style="width: 12%;">操作</th>
+                        <th style="width: 14%;">操作</th>
                     </tr>
                 </thead>
                 <tbody id="drug-tbody">
@@ -343,20 +389,110 @@
         </div>
 
         <div class="info-note">
+            ※ 「薬剤名」に入力すると、R8年対象医薬品リストから自動サジェストされます。リストから薬剤を選択すると、薬価が固定され編集できなくなります（手動で文字を消す・変更すると再編集可能になります）。<br>
             ※ 内服薬の価格差は「1錠・1単位あたり」として計算されます。1日当たり複数錠服用する場合は「1日量」にその数量を入力してください。<br>
             ※ 外用薬の場合、「1日量」は計算の対象外（入力不可）となり、処方された「全数量」に対して一括して端数処理（点数化）を行います。
         </div>
     </div>
 </div>
 
+<!-- 最前面に配置される共通サジェストボックス -->
+<div id="global-suggest-box" class="suggest-box"></div>
+
 <script>
-    // サンプルデータ（リーフレットの例に沿ったデータ）
+    // 薬剤データベース（JSON）
+    const drugDatabase = [{"name": "ユーロジン２ｍｇ錠", "target": 7.4, "generic": 6.3}, {"name": "ベンザリン錠５", "target": 7.2, "generic": 6.3}, {"name": "ベンザリン錠１０", "target": 11.7, "generic": 6.3}, {"name": "ハルシオン０．１２５ｍｇ錠", "target": 6.3, "generic": 6.1}, {"name": "ハルシオン０．２５ｍｇ錠", "target": 6.4, "generic": 6.3}, {"name": "サイレース錠１ｍｇ", "target": 6.4, "generic": 6.1}, {"name": "サイレース錠２ｍｇ", "target": 7.4, "generic": 6.3}, {"name": "２ｍｇセルシン錠", "target": 6.4, "generic": 6.1}, {"name": "ホリゾン錠２ｍｇ", "target": 6.4, "generic": 6.1}, {"name": "５ｍｇセルシン錠", "target": 10.0, "generic": 6.2}, {"name": "ホリゾン錠５ｍｇ", "target": 10.0, "generic": 6.2}, {"name": "１０ｍｇセルシン錠", "target": 10.8, "generic": 6.1}, {"name": "グランダキシン錠５０", "target": 6.9, "generic": 6.3}, {"name": "メイラックス錠２ｍｇ", "target": 12.7, "generic": 10.8}, {"name": "ドラール錠１５", "target": 30.9, "generic": 20.6}, {"name": "ドラール錠２０", "target": 40.1, "generic": 26.7}, {"name": "アモバン錠７．５", "target": 10.9, "generic": 10.8}, {"name": "アモバン錠１０", "target": 11.5, "generic": 10.8}, {"name": "セディール錠５ｍｇ", "target": 7.4, "generic": 6.3}, {"name": "セディール錠１０ｍｇ", "target": 12.2, "generic": 8.4}, {"name": "セディール錠２０ｍｇ", "target": 21.3, "generic": 16.5}, {"name": "マイスリー錠５ｍｇ", "target": 13.8, "generic": 10.8}, {"name": "マイスリー錠１０ｍｇ", "target": 21.5, "generic": 14.1}, {"name": "ルネスタ錠１ｍｇ", "target": 24.2, "generic": 9.1}, {"name": "ルネスタ錠２ｍｇ", "target": 40.3, "generic": 15.3}, {"name": "ルネスタ錠３ｍｇ", "target": 45.6, "generic": 19.4}, {"name": "エクセグラン散２０％", "target": 25.2, "generic": 23.8}, {"name": "エクセグラン錠１００ｍｇ", "target": 12.6, "generic": 10.8}, {"name": "トピナ錠５０ｍｇ", "target": 36.1, "generic": 18.4}, {"name": "トピナ錠１００ｍｇ", "target": 59.9, "generic": 25.6}, {"name": "トピナ錠２５ｍｇ", "target": 16.5, "generic": 8.6}, {"name": "イーケプラ錠２５０ｍｇ", "target": 61.2, "generic": 24.7}, {"name": "イーケプラ錠５００ｍｇ", "target": 100.3, "generic": 43.6}, {"name": "イーケプラドライシロップ５０％", "target": 119.6, "generic": 60.9}, {"name": "ボルタレン錠２５ｍｇ", "target": 6.5, "generic": 6.1}, {"name": "ロキソニン錠６０ｍｇ", "target": 10.8, "generic": 10.5}, {"name": "ソレトン錠８０", "target": 14.0, "generic": 10.8}, {"name": "ハイペン錠１００ｍｇ", "target": 6.8, "generic": 6.3}, {"name": "モービック錠５ｍｇ", "target": 10.5, "generic": 9.5}, {"name": "モービック錠１０ｍｇ", "target": 19.0, "generic": 14.4}, {"name": "セレコックス錠１００ｍｇ", "target": 15.7, "generic": 8.3}, {"name": "セレコックス錠２００ｍｇ", "target": 23.0, "generic": 12.5}, {"name": "トラマールＯＤ錠２５ｍｇ", "target": 13.9, "generic": 8.4}, {"name": "トラマールＯＤ錠５０ｍｇ", "target": 23.6, "generic": 14.3}, {"name": "トラムセット配合錠", "target": 21.4, "generic": 14.3}, {"name": "シンメトレル錠５０ｍｇ", "target": 7.4, "generic": 6.3}, {"name": "アキネトン細粒１％", "target": 19.2, "generic": 11.0}, {"name": "ペルマックス錠５０μｇ", "target": 16.9, "generic": 13.9}, {"name": "ペルマックス錠２５０μｇ", "target": 60.2, "generic": 57.8}, {"name": "ビ・シフロール錠０．１２５ｍｇ", "target": 15.7, "generic": 8.9}, {"name": "ビ・シフロール錠０．５ｍｇ", "target": 57.6, "generic": 33.1}, {"name": "ミラペックスＬＡ錠０．３７５ｍｇ", "target": 31.9, "generic": 18.9}, {"name": "ミラペックスＬＡ錠１．５ｍｇ", "target": 118.1, "generic": 67.4}, {"name": "レキップ錠０．２５ｍｇ", "target": 15.7, "generic": 14.7}, {"name": "レキップ錠１ｍｇ", "target": 51.5, "generic": 27.1}, {"name": "レキップ錠２ｍｇ", "target": 88.3, "generic": 48.9}, {"name": "レキップＣＲ錠２ｍｇ", "target": 67.3, "generic": 43.3}, {"name": "レキップＣＲ錠８ｍｇ", "target": 217.5, "generic": 145.6}, {"name": "コムタン錠１００ｍｇ", "target": 60.3, "generic": 24.1}, {"name": "トレリーフＯＤ錠２５ｍｇ", "target": 513.1, "generic": 267.0}, {"name": "トレリーフＯＤ錠５０ｍｇ", "target": 733.6, "generic": 401.6}, {"name": "ネオドパストン配合錠Ｌ１００", "target": 12.3, "generic": 11.3}, {"name": "ネオドパストン配合錠Ｌ２５０", "target": 36.5, "generic": 30.0}, {"name": "レボトミン錠２５ｍｇ", "target": 8.6, "generic": 6.3}, {"name": "ルジオミール錠２５ｍｇ", "target": 10.2, "generic": 7.2}, {"name": "セレネース細粒１％", "target": 27.2, "generic": 14.9}, {"name": "テシプール錠１ｍｇ", "target": 7.0, "generic": 6.3}, {"name": "レスリン錠５０", "target": 10.4, "generic": 6.3}, {"name": "リスパダール細粒１％", "target": 62.5, "generic": 50.4}, {"name": "リスパダール錠２ｍｇ", "target": 16.0, "generic": 10.8}, {"name": "リスパダール錠３ｍｇ", "target": 19.3, "generic": 15.1}, {"name": "リスパダールＯＤ錠２ｍｇ", "target": 16.0, "generic": 10.8}, {"name": "デプロメール錠２５", "target": 15.4, "generic": 10.8}, {"name": "ルボックス錠２５", "target": 11.4, "generic": 10.8}, {"name": "デプロメール錠５０", "target": 22.7, "generic": 12.3}, {"name": "ルボックス錠５０", "target": 17.1, "generic": 12.3}, {"name": "デプロメール錠７５", "target": 32.8, "generic": 17.5}, {"name": "ルボックス錠７５", "target": 18.5, "generic": 17.5}, {"name": "トレドミン錠１５ｍｇ", "target": 7.4, "generic": 7.0}, {"name": "トレドミン錠２５ｍｇ", "target": 10.1, "generic": 8.9}, {"name": "トレドミン錠５０ｍｇ", "target": 17.3, "generic": 15.5}, {"name": "セロクエル細粒５０％", "target": 185.4, "generic": 123.1}, {"name": "セロクエル２５ｍｇ錠", "target": 13.7, "generic": 10.8}, {"name": "セロクエル１００ｍｇ錠", "target": 26.2, "generic": 19.8}, {"name": "セロクエル２００ｍｇ錠", "target": 48.1, "generic": 37.0}, {"name": "ルーラン錠４ｍｇ", "target": 8.3, "generic": 6.3}, {"name": "ルーラン錠８ｍｇ", "target": 16.5, "generic": 9.2}, {"name": "ルーラン錠１６ｍｇ", "target": 28.8, "generic": 14.4}, {"name": "ジプレキサ細粒１％", "target": 118.4, "generic": 60.3}, {"name": "ジプレキサ錠２．５ｍｇ", "target": 27.9, "generic": 12.8}, {"name": "ジプレキサ錠５ｍｇ", "target": 52.1, "generic": 16.0}, {"name": "ジプレキサ錠１０ｍｇ", "target": 104.5, "generic": 47.0}, {"name": "ジプレキサザイディス錠５ｍｇ", "target": 52.1, "generic": 16.0}, {"name": "ジプレキサザイディス錠１０ｍｇ", "target": 104.5, "generic": 27.1}, {"name": "ジプレキサザイディス錠２．５ｍｇ", "target": 27.9, "generic": 12.8}, {"name": "エビリファイ散１％", "target": 46.4, "generic": 23.6}, {"name": "エビリファイ錠３ｍｇ", "target": 16.3, "generic": 9.7}, {"name": "エビリファイ錠６ｍｇ", "target": 32.0, "generic": 14.4}, {"name": "エビリファイ錠１２ｍｇ", "target": 60.1, "generic": 26.6}, {"name": "エビリファイＯＤ錠３ｍｇ", "target": 16.3, "generic": 9.7}, {"name": "エビリファイＯＤ錠６ｍｇ", "target": 32.0, "generic": 21.5}, {"name": "エビリファイＯＤ錠１２ｍｇ", "target": 60.1, "generic": 43.2}, {"name": "エビリファイＯＤ錠２４ｍｇ", "target": 115.7, "generic": 63.5}, {"name": "エビリファイ錠１ｍｇ", "target": 9.5, "generic": 6.3}, {"name": "ジェイゾロフト錠２５ｍｇ", "target": 23.8, "generic": 9.5}, {"name": "ジェイゾロフト錠５０ｍｇ", "target": 42.3, "generic": 23.6}, {"name": "ジェイゾロフト錠１００ｍｇ", "target": 67.4, "generic": 37.6}, {"name": "ジェイゾロフトＯＤ錠２５ｍｇ", "target": 23.8, "generic": 9.5}, {"name": "ジェイゾロフトＯＤ錠５０ｍｇ", "target": 42.3, "generic": 23.6}, {"name": "ジェイゾロフトＯＤ錠１００ｍｇ", "target": 67.4, "generic": 37.6}, {"name": "ロナセン散２％", "target": 226.1, "generic": 120.3}, {"name": "ロナセン錠２ｍｇ", "target": 19.5, "generic": 11.3}, {"name": "ロナセン錠４ｍｇ", "target": 37.8, "generic": 15.1}, {"name": "ロナセン錠８ｍｇ", "target": 65.9, "generic": 26.1}, {"name": "ストラテラカプセル５ｍｇ", "target": 61.7, "generic": 38.3}, {"name": "ストラテラカプセル１０ｍｇ", "target": 93.0, "generic": 43.5}, {"name": "ストラテラカプセル２５ｍｇ", "target": 125.1, "generic": 53.6}, {"name": "ストラテラカプセル４０ｍｇ", "target": 140.3, "generic": 55.1}, {"name": "ストラテラ内用液０．４％", "target": 46.6, "generic": 37.2}, {"name": "リフレックス錠１５ｍｇ", "target": 33.4, "generic": 23.9}, {"name": "レメロン錠１５ｍｇ", "target": 33.4, "generic": 23.9}, {"name": "リフレックス錠３０ｍｇ", "target": 57.3, "generic": 36.1}, {"name": "レメロン錠３０ｍｇ", "target": 57.3, "generic": 36.1}, {"name": "サインバルタカプセル２０ｍｇ", "target": 62.3, "generic": 25.7}, {"name": "サインバルタカプセル３０ｍｇ", "target": 77.1, "generic": 30.5}, {"name": "レクサプロ錠１０ｍｇ", "target": 78.5, "generic": 44.1}, {"name": "レクサプロ錠２０ｍｇ", "target": 103.2, "generic": 65.6}, {"name": "グラマリール細粒１０％", "target": 15.2, "generic": 10.1}, {"name": "グラマリール錠２５ｍｇ", "target": 11.5, "generic": 10.8}, {"name": "グラマリール錠５０ｍｇ", "target": 14.9, "generic": 10.8}, {"name": "リルテック錠５０", "target": 886.6, "generic": 335.5}, {"name": "アリセプト細粒０．５％", "target": 64.2, "generic": 35.9}, {"name": "アリセプト錠３ｍｇ", "target": 36.7, "generic": 25.2}, {"name": "アリセプト錠５ｍｇ", "target": 53.1, "generic": 37.8}, {"name": "アリセプトＤ錠３ｍｇ", "target": 36.7, "generic": 25.2}, {"name": "アリセプトＤ錠５ｍｇ", "target": 53.1, "generic": 37.8}, {"name": "アリセプト錠１０ｍｇ", "target": 89.1, "generic": 63.0}, {"name": "アリセプトＤ錠１０ｍｇ", "target": 89.1, "generic": 63.0}, {"name": "アリセプト内服ゼリー３ｍｇ", "target": 80.7, "generic": 61.1}, {"name": "セレジスト錠５ｍｇ", "target": 574.3, "generic": 176.2}, {"name": "セレジストＯＤ錠５ｍｇ", "target": 574.3, "generic": 176.2}, {"name": "レミッチＯＤ錠２．５μｇ", "target": 394.1, "generic": 204.4}, {"name": "ロゼレム錠８ｍｇ", "target": 36.8, "generic": 20.9}, {"name": "リリカＯＤ錠２５ｍｇ", "target": 23.7, "generic": 10.2}, {"name": "リリカＯＤ錠７５ｍｇ", "target": 38.4, "generic": 16.1}, {"name": "リリカＯＤ錠１５０ｍｇ", "target": 53.2, "generic": 29.2}, {"name": "リリカカプセル２５ｍｇ", "target": 23.7, "generic": 10.2}, {"name": "リリカカプセル７５ｍｇ", "target": 38.4, "generic": 16.1}, {"name": "リリカカプセル１５０ｍｇ", "target": 53.2, "generic": 22.1}, {"name": "メマリー錠５ｍｇ", "target": 36.7, "generic": 19.6}, {"name": "メマリー錠１０ｍｇ", "target": 62.1, "generic": 33.7}, {"name": "メマリー錠２０ｍｇ", "target": 112.7, "generic": 61.6}, {"name": "メマリーＯＤ錠５ｍｇ", "target": 36.7, "generic": 19.6}, {"name": "メマリーＯＤ錠１０ｍｇ", "target": 62.1, "generic": 33.7}, {"name": "メマリーＯＤ錠２０ｍｇ", "target": 112.7, "generic": 61.6}, {"name": "メマリードライシロップ２％", "target": 168.0, "generic": 93.2}, {"name": "レミニールＯＤ錠４ｍｇ", "target": 40.7, "generic": 21.1}, {"name": "レミニールＯＤ錠８ｍｇ", "target": 61.3, "generic": 26.0}, {"name": "レミニールＯＤ錠１２ｍｇ", "target": 74.0, "generic": 38.3}, {"name": "チアトンカプセル１０ｍｇ", "target": 7.8, "generic": 7.6}, {"name": "ミオナール錠５０ｍｇ", "target": 7.7, "generic": 6.3}, {"name": "ノイキノン錠１０ｍｇ", "target": 7.2, "generic": 6.3}, {"name": "ノイキノン糖衣錠１０ｍｇ", "target": 7.2, "generic": 6.3}, {"name": "カルグート錠５", "target": 15.8, "generic": 10.5}, {"name": "カルグート錠１０", "target": 26.0, "generic": 17.3}, {"name": "ミケラン錠５ｍｇ", "target": 8.0, "generic": 6.3}, {"name": "テノーミン錠２５", "target": 7.5, "generic": 6.3}, {"name": "テノーミン錠５０", "target": 7.9, "generic": 6.3}, {"name": "アロチノロール塩酸塩錠１０ｍｇ「ＤＳＰ」", "target": 10.5, "generic": 7.0}, {"name": "メインテート錠２．５ｍｇ", "target": 12.2, "generic": 10.8}, {"name": "メインテート錠５ｍｇ", "target": 14.8, "generic": 10.8}, {"name": "メキシチールカプセル５０ｍｇ", "target": 8.2, "generic": 7.9}, {"name": "メキシチールカプセル１００ｍｇ", "target": 12.3, "generic": 10.6}, {"name": "アスペノンカプセル１０", "target": 15.7, "generic": 11.1}, {"name": "アスペノンカプセル２０", "target": 23.6, "generic": 17.0}, {"name": "リスモダンＲ錠１５０ｍｇ", "target": 20.2, "generic": 13.6}, {"name": "プロノン錠１５０ｍｇ", "target": 19.2, "generic": 12.8}, {"name": "プロノン錠１００ｍｇ", "target": 19.5, "generic": 16.5}, {"name": "シベノール錠５０ｍｇ", "target": 15.1, "generic": 10.8}, {"name": "シベノール錠１００ｍｇ", "target": 21.3, "generic": 14.2}, {"name": "サンリズムカプセル２５ｍｇ", "target": 16.2, "generic": 10.8}, {"name": "サンリズムカプセル５０ｍｇ", "target": 26.9, "generic": 17.9}, {"name": "タンボコール錠５０ｍｇ", "target": 30.8, "generic": 12.3}, {"name": "タンボコール錠１００ｍｇ", "target": 50.5, "generic": 20.2}, {"name": "ベプリコール錠５０ｍｇ", "target": 28.7, "generic": 17.1}, {"name": "ベプリコール錠１００ｍｇ", "target": 53.0, "generic": 33.7}, {"name": "アルダクトンＡ錠２５ｍｇ", "target": 11.5, "generic": 10.8}, {"name": "ラシックス錠２０ｍｇ", "target": 10.5, "generic": 6.5}, {"name": "ラシックス錠４０ｍｇ", "target": 10.8, "generic": 6.8}, {"name": "ラシックス錠１０ｍｇ", "target": 9.9, "generic": 6.5}, {"name": "ダイアート錠６０ｍｇ", "target": 14.1, "generic": 10.8}, {"name": "ルプラック錠４ｍｇ", "target": 12.3, "generic": 6.3}, {"name": "ルプラック錠８ｍｇ", "target": 15.8, "generic": 6.3}, {"name": "サムスカ顆粒１％", "target": 1152.8, "generic": 532.9}, {"name": "サムスカＯＤ錠７．５ｍｇ", "target": 715.5, "generic": 292.0}, {"name": "サムスカＯＤ錠１５ｍｇ", "target": 1056.2, "generic": 510.3}, {"name": "セタプリル錠２５ｍｇ", "target": 13.3, "generic": 10.8}, {"name": "ロンゲス錠５ｍｇ", "target": 12.0, "generic": 10.8}, {"name": "ロンゲス錠１０ｍｇ", "target": 16.1, "generic": 10.8}, {"name": "ロンゲス錠２０ｍｇ", "target": 15.5, "generic": 11.2}, {"name": "タナトリル錠２．５", "target": 15.8, "generic": 10.8}, {"name": "タナトリル錠５", "target": 20.7, "generic": 13.8}, {"name": "タナトリル錠１０", "target": 41.2, "generic": 27.5}, {"name": "エースコール錠１ｍｇ", "target": 12.6, "generic": 10.8}, {"name": "エースコール錠２ｍｇ", "target": 24.3, "generic": 16.2}, {"name": "エースコール錠４ｍｇ", "target": 48.5, "generic": 32.3}, {"name": "ニバジール錠４ｍｇ", "target": 14.3, "generic": 10.8}, {"name": "カルデナリン錠１ｍｇ", "target": 13.3, "generic": 10.8}, {"name": "カルデナリン錠２ｍｇ", "target": 16.0, "generic": 10.8}, {"name": "カルデナリン錠４ｍｇ", "target": 20.4, "generic": 15.0}, {"name": "カルスロット錠５", "target": 11.6, "generic": 10.8}, {"name": "カルスロット錠１０", "target": 14.7, "generic": 10.8}, {"name": "カルスロット錠２０", "target": 18.3, "generic": 12.1}, {"name": "セレクトール錠１００ｍｇ", "target": 11.1, "generic": 7.4}, {"name": "セレクトール錠２００ｍｇ", "target": 22.2, "generic": 14.8}, {"name": "ケルロング錠５ｍｇ", "target": 23.0, "generic": 11.0}, {"name": "ケルロング錠１０ｍｇ", "target": 39.8, "generic": 23.9}, {"name": "アーチスト錠１０ｍｇ", "target": 13.2, "generic": 10.8}, {"name": "アーチスト錠２０ｍｇ", "target": 23.6, "generic": 15.5}, {"name": "スプレンジール錠５ｍｇ", "target": 16.2, "generic": 10.8}, {"name": "アテレック錠５", "target": 11.4, "generic": 10.8}, {"name": "アテレック錠１０", "target": 18.3, "generic": 12.2}, {"name": "アテレック錠２０", "target": 26.6, "generic": 18.9}, {"name": "ニューロタン錠２５ｍｇ", "target": 18.2, "generic": 10.8}, {"name": "ニューロタン錠５０ｍｇ", "target": 33.4, "generic": 18.1}, {"name": "ブロプレス錠２", "target": 14.7, "generic": 10.8}, {"name": "ブロプレス錠４", "target": 18.1, "generic": 13.7}, {"name": "ブロプレス錠８", "target": 27.0, "generic": 25.6}, {"name": "ブロプレス錠１２", "target": 31.9, "generic": 28.4}, {"name": "ディオバン錠４０ｍｇ", "target": 13.7, "generic": 10.8}, {"name": "ディオバン錠８０ｍｇ", "target": 18.3, "generic": 12.2}, {"name": "ディオバン錠１６０ｍｇ", "target": 25.8, "generic": 17.3}, {"name": "ディオバンＯＤ錠４０ｍｇ", "target": 13.7, "generic": 10.8}, {"name": "ディオバンＯＤ錠８０ｍｇ", "target": 18.3, "generic": 12.2}, {"name": "ディオバンＯＤ錠１６０ｍｇ", "target": 25.8, "generic": 17.3}, {"name": "ミカルディス錠２０ｍｇ", "target": 15.8, "generic": 10.8}, {"name": "ミカルディス錠４０ｍｇ", "target": 24.8, "generic": 16.0}, {"name": "ミカルディス錠８０ｍｇ", "target": 31.3, "generic": 23.5}, {"name": "カルブロック錠１６ｍｇ", "target": 21.8, "generic": 11.9}, {"name": "オルメテックＯＤ錠１０ｍｇ", "target": 13.6, "generic": 10.8}, {"name": "オルメテックＯＤ錠２０ｍｇ", "target": 23.9, "generic": 16.6}, {"name": "オルメテックＯＤ錠４０ｍｇ", "target": 32.1, "generic": 23.1}, {"name": "セララ錠２５ｍｇ", "target": 17.9, "generic": 10.8}, {"name": "セララ錠５０ｍｇ", "target": 35.8, "generic": 18.4}, {"name": "セララ錠１００ｍｇ", "target": 60.9, "generic": 35.0}, {"name": "アバプロ錠５０ｍｇ", "target": 18.7, "generic": 10.8}, {"name": "イルベタン錠５０ｍｇ", "target": 17.4, "generic": 10.8}, {"name": "アバプロ錠１００ｍｇ", "target": 29.5, "generic": 15.9}, {"name": "イルベタン錠１００ｍｇ", "target": 29.5, "generic": 15.9}, {"name": "アバプロ錠２００ｍｇ", "target": 42.8, "generic": 22.9}, {"name": "イルベタン錠２００ｍｇ", "target": 40.3, "generic": 22.9}, {"name": "アジルバ錠２０ｍｇ", "target": 67.2, "generic": 25.8}, {"name": "アジルバ錠４０ｍｇ", "target": 96.5, "generic": 38.3}, {"name": "アジルバ錠１０ｍｇ", "target": 42.2, "generic": 17.1}, {"name": "プレミネント配合錠ＬＤ", "target": 36.6, "generic": 22.2}, {"name": "プレミネント配合錠ＨＤ", "target": 50.9, "generic": 45.0}, {"name": "エカード配合錠ＬＤ", "target": 19.6, "generic": 11.5}, {"name": "エカード配合錠ＨＤ", "target": 28.6, "generic": 21.5}, {"name": "コディオ配合錠ＭＤ", "target": 21.5, "generic": 17.8}, {"name": "ミコンビ配合錠ＡＰ", "target": 28.0, "generic": 19.8}, {"name": "ミコンビ配合錠ＢＰ", "target": 38.5, "generic": 27.6}, {"name": "エックスフォージ配合錠", "target": 20.3, "generic": 14.0}, {"name": "エックスフォージ配合ＯＤ錠", "target": 20.3, "generic": 14.0}, {"name": "ユニシア配合錠ＬＤ", "target": 28.6, "generic": 19.0}, {"name": "ユニシア配合錠ＨＤ", "target": 28.6, "generic": 19.0}, {"name": "ミカムロ配合錠ＡＰ", "target": 26.4, "generic": 19.5}, {"name": "ミカムロ配合錠ＢＰ", "target": 35.0, "generic": 28.3}, {"name": "アイミクス配合錠ＬＤ", "target": 30.3, "generic": 15.6}, {"name": "アイミクス配合錠ＨＤ", "target": 32.2, "generic": 17.9}, {"name": "ザクラス配合錠ＬＤ", "target": 59.8, "generic": 23.9}, {"name": "ザクラス配合錠ＨＤ", "target": 62.0, "generic": 24.8}, {"name": "メトリジン錠２ｍｇ", "target": 10.9, "generic": 7.4}, {"name": "イミグラン錠５０", "target": 211.8, "generic": 119.6}, {"name": "ゾーミッグＲＭ錠２．５ｍｇ", "target": 266.4, "generic": 146.9}, {"name": "レルパックス錠２０ｍｇ", "target": 261.7, "generic": 146.9}, {"name": "マクサルトＲＰＤ錠１０ｍｇ", "target": 177.6, "generic": 116.6}, {"name": "アマージ錠２．５ｍｇ", "target": 202.7, "generic": 153.3}, {"name": "コメリアンコーワ錠１００", "target": 8.1, "generic": 6.3}, {"name": "ヘルベッサー錠６０", "target": 7.9, "generic": 7.3}, {"name": "ヘルベッサーＲカプセル１００ｍｇ", "target": 14.1, "generic": 11.3}, {"name": "ワソラン錠４０ｍｇ", "target": 7.7, "generic": 6.8}, {"name": "ニトロールＲカプセル２０ｍｇ", "target": 7.4, "generic": 6.3}, {"name": "ロコルナール錠５０ｍｇ", "target": 7.0, "generic": 6.3}, {"name": "ロコルナール錠１００ｍｇ", "target": 7.5, "generic": 6.3}, {"name": "コニール錠４", "target": 14.5, "generic": 10.8}, {"name": "リピディル錠５３．３ｍｇ", "target": 13.2, "generic": 9.1}, {"name": "トライコア錠５３．３ｍｇ", "target": 13.6, "generic": 9.1}, {"name": "リピディル錠８０ｍｇ", "target": 16.2, "generic": 10.8}, {"name": "トライコア錠８０ｍｇ", "target": 16.2, "generic": 10.8}, {"name": "ローコール錠１０ｍｇ", "target": 18.7, "generic": 9.8}, {"name": "ローコール錠２０ｍｇ", "target": 34.3, "generic": 19.9}, {"name": "ローコール錠３０ｍｇ", "target": 48.2, "generic": 24.6}, {"name": "リピトール錠５ｍｇ", "target": 13.6, "generic": 10.8}, {"name": "リピトール錠１０ｍｇ", "target": 16.9, "generic": 11.5}, {"name": "リバロ錠１ｍｇ", "target": 15.8, "generic": 13.6}, {"name": "リバロ錠２ｍｇ", "target": 26.5, "generic": 25.4}, {"name": "リバロＯＤ錠１ｍｇ", "target": 15.8, "generic": 10.8}, {"name": "リバロＯＤ錠２ｍｇ", "target": 26.5, "generic": 14.2}, {"name": "リバロＯＤ錠４ｍｇ", "target": 48.7, "generic": 22.7}, {"name": "クレストール錠２．５ｍｇ", "target": 15.1, "generic": 10.8}, {"name": "クレストール錠５ｍｇ", "target": 23.5, "generic": 16.9}, {"name": "ゼチーア錠１０ｍｇ", "target": 49.5, "generic": 28.2}, {"name": "ロトリガ粒状カプセル２ｇ", "target": 122.5, "generic": 72.3}, {"name": "アトーゼット配合錠ＬＤ", "target": 50.4, "generic": 50.0}, {"name": "アトーゼット配合錠ＨＤ", "target": 53.1, "generic": 49.0}, {"name": "ロスーゼット配合錠ＬＤ", "target": 50.4, "generic": 31.6}, {"name": "ロスーゼット配合錠ＨＤ", "target": 56.0, "generic": 31.3}, {"name": "サアミオン錠５ｍｇ", "target": 12.3, "generic": 10.8}, {"name": "リズミック錠１０ｍｇ", "target": 9.5, "generic": 6.3}, {"name": "カルタン錠５００", "target": 6.8, "generic": 6.2}, {"name": "トラクリア錠６２．５ｍｇ", "target": 2913.1, "generic": 393.1}, {"name": "ホスレノール顆粒分包２５０ｍｇ", "target": 53.0, "generic": 41.0}, {"name": "ホスレノールＯＤ錠２５０ｍｇ", "target": 55.6, "generic": 32.2}, {"name": "ホスレノールＯＤ錠５００ｍｇ", "target": 80.5, "generic": 47.4}, {"name": "アドシルカ錠２０ｍｇ", "target": 653.3, "generic": 489.6}, {"name": "カデュエット配合錠１番", "target": 28.6, "generic": 21.4}, {"name": "カデュエット配合錠２番", "target": 43.7, "generic": 34.2}, {"name": "カデュエット配合錠３番", "target": 34.2, "generic": 21.7}, {"name": "カデュエット配合錠４番", "target": 49.2, "generic": 34.4}, {"name": "ムコダインシロップ５％", "target": 7.1, "generic": 5.8}, {"name": "ムコソルバン錠１５ｍｇ", "target": 6.3, "generic": 6.1}, {"name": "小児用ムコソルバンシロップ０．３％", "target": 7.1, "generic": 5.6}, {"name": "小児用ムコソルバンＤＳ１．５％", "target": 31.1, "generic": 17.6}, {"name": "ユニコン錠２００", "target": 12.2, "generic": 6.3}, {"name": "ユニコン錠４００", "target": 12.2, "generic": 6.3}, {"name": "ユニコン錠１００", "target": 9.0, "generic": 6.3}, {"name": "メプチンシロップ５μｇ／ｍＬ", "target": 7.1, "generic": 4.1}, {"name": "ガスコン錠８０ｍｇ", "target": 6.3, "generic": 6.1}, {"name": "ガスコンドロップ内用液２％", "target": 3.3, "generic": 3.0}, {"name": "ロペミンカプセル１ｍｇ", "target": 8.0, "generic": 6.3}, {"name": "フェロベリン配合錠", "target": 8.9, "generic": 6.3}, {"name": "タガメット錠２００ｍｇ", "target": 7.6, "generic": 6.3}, {"name": "ガスター散１０％", "target": 37.3, "generic": 36.8}, {"name": "ガスター散２％", "target": 9.5, "generic": 9.4}, {"name": "アルタットカプセル３７．５ｍｇ", "target": 12.6, "generic": 10.8}, {"name": "プロテカジン錠１０", "target": 11.6, "generic": 10.8}, {"name": "アルサルミン内用液１０％", "target": 1.8, "generic": 1.5}, {"name": "ドグマチール錠５０ｍｇ", "target": 10.8, "generic": 6.8}, {"name": "ドグマチールカプセル５０ｍｇ", "target": 10.8, "generic": 6.8}, {"name": "ガスロンＮ錠２ｍｇ", "target": 10.8, "generic": 10.6}, {"name": "パリエット錠２０ｍｇ", "target": 45.4, "generic": 40.8}, {"name": "ネキシウムカプセル１０ｍｇ", "target": 27.2, "generic": 19.4}, {"name": "ネキシウムカプセル２０ｍｇ", "target": 48.2, "generic": 33.7}, {"name": "マーズレンＳ配合顆粒", "target": 9.4, "generic": 6.9}, {"name": "プルゼニド錠１２ｍｇ", "target": 6.1, "generic": 5.5}, {"name": "ラキソベロン内用液０．７５％", "target": 11.6, "generic": 8.5}, {"name": "プリンペラン細粒２％", "target": 11.2, "generic": 6.9}, {"name": "ナウゼリンドライシロップ１％", "target": 8.4, "generic": 6.9}, {"name": "ガナトン錠５０ｍｇ", "target": 7.1, "generic": 6.3}, {"name": "ペンタサ錠２５０ｍｇ", "target": 26.1, "generic": 16.8}, {"name": "ペンタサ錠５００ｍｇ", "target": 45.8, "generic": 23.9}, {"name": "アサコール錠４００ｍｇ", "target": 26.7, "generic": 15.7}, {"name": "ガスモチン散１％", "target": 17.2, "generic": 8.9}, {"name": "ガスモチン錠２．５ｍｇ", "target": 10.8, "generic": 10.5}, {"name": "リンデロン散０．１％", "target": 19.0, "generic": 15.0}, {"name": "セレスタミン配合錠", "target": 7.2, "generic": 6.3}, {"name": "ジュリナ錠０．５ｍｇ", "target": 30.3, "generic": 18.9}, {"name": "プロベラ錠２．５ｍｇ", "target": 14.9, "generic": 12.6}, {"name": "ヒスロン錠５", "target": 23.1, "generic": 13.5}, {"name": "ヒスロンＨ錠２００ｍｇ", "target": 77.6, "generic": 52.8}, {"name": "ルナベル配合錠ＬＤ", "target": 86.7, "generic": 57.8}, {"name": "ルナベル配合錠ＵＬＤ", "target": 111.2, "generic": 56.4}, {"name": "カルナクリン錠２５", "target": 9.4, "generic": 6.3}, {"name": "カルナクリン錠５０", "target": 12.2, "generic": 10.3}, {"name": "ディナゲスト錠１ｍｇ", "target": 71.2, "generic": 48.2}, {"name": "ディナゲスト錠０．５ｍｇ", "target": 67.7, "generic": 38.7}, {"name": "アボルブカプセル０．５ｍｇ", "target": 46.0, "generic": 25.7}, {"name": "ポラキス錠２", "target": 9.4, "generic": 6.3}, {"name": "ポラキス錠３", "target": 9.4, "generic": 6.3}, {"name": "ポラキス錠１", "target": 9.6, "generic": 6.3}, {"name": "バップフォー錠１０", "target": 17.6, "generic": 12.9}, {"name": "バップフォー錠２０", "target": 34.1, "generic": 23.6}, {"name": "フリバス錠２５ｍｇ", "target": 15.4, "generic": 10.8}, {"name": "フリバス錠５０ｍｇ", "target": 28.7, "generic": 10.8}, {"name": "フリバス錠７５ｍｇ", "target": 34.9, "generic": 14.2}, {"name": "フリバスＯＤ錠５０ｍｇ", "target": 28.7, "generic": 12.3}, {"name": "フリバスＯＤ錠７５ｍｇ", "target": 34.9, "generic": 19.0}, {"name": "フリバスＯＤ錠２５ｍｇ", "target": 15.4, "generic": 10.8}, {"name": "ユリーフ錠２ｍｇ", "target": 14.1, "generic": 10.8}, {"name": "ユリーフ錠４ｍｇ", "target": 23.1, "generic": 12.3}, {"name": "ユリーフＯＤ錠２ｍｇ", "target": 14.1, "generic": 10.8}, {"name": "ユリーフＯＤ錠４ｍｇ", "target": 23.1, "generic": 12.3}, {"name": "ベシケア錠２．５ｍｇ", "target": 40.3, "generic": 22.4}, {"name": "ベシケア錠５ｍｇ", "target": 70.7, "generic": 55.4}, {"name": "ベシケアＯＤ錠２．５ｍｇ", "target": 40.3, "generic": 17.3}, {"name": "ベシケアＯＤ錠５ｍｇ", "target": 70.7, "generic": 28.9}, {"name": "ウリトス錠０．１ｍｇ", "target": 36.3, "generic": 14.5}, {"name": "ステーブラ錠０．１ｍｇ", "target": 36.3, "generic": 14.5}, {"name": "ウリトスＯＤ錠０．１ｍｇ", "target": 36.3, "generic": 14.5}, {"name": "ステーブラＯＤ錠０．１ｍｇ", "target": 36.3, "generic": 14.5}, {"name": "ザルティア錠２．５ｍｇ", "target": 40.3, "generic": 27.2}, {"name": "ザルティア錠５ｍｇ", "target": 78.6, "generic": 59.9}, {"name": "エビプロスタット配合錠ＤＢ", "target": 22.3, "generic": 6.3}, {"name": "ワンアルファ錠０．２５μｇ", "target": 7.1, "generic": 6.3}, {"name": "ワンアルファ錠０．５μｇ", "target": 7.2, "generic": 6.3}, {"name": "ワンアルファ錠１．０μｇ", "target": 9.8, "generic": 6.3}, {"name": "アルファロールカプセル１μｇ", "target": 8.4, "generic": 6.3}, {"name": "アルファロールカプセル３μｇ", "target": 21.6, "generic": 14.3}, {"name": "ロカルトロールカプセル０．２５", "target": 7.4, "generic": 6.3}, {"name": "ロカルトロールカプセル０．５", "target": 10.3, "generic": 7.4}, {"name": "エディロールカプセル０．５μｇ", "target": 23.9, "generic": 12.3}, {"name": "エディロールカプセル０．７５μｇ", "target": 34.9, "generic": 18.0}, {"name": "パントシン散２０％", "target": 10.0, "generic": 9.5}, {"name": "パントシン錠６０", "target": 6.3, "generic": 6.1}, {"name": "パントシン錠１００", "target": 6.3, "generic": 6.1}, {"name": "カチーフＮ錠５ｍｇ", "target": 10.3, "generic": 6.3}, {"name": "ケーワン錠５ｍｇ", "target": 6.4, "generic": 6.3}, {"name": "グラケーカプセル１５ｍｇ", "target": 11.9, "generic": 9.9}, {"name": "トランサミンシロップ５％", "target": 4.7, "generic": 3.7}, {"name": "イグザレルト錠１０ｍｇ", "target": 317.6, "generic": 143.0}, {"name": "イグザレルト錠１５ｍｇ", "target": 420.3, "generic": 200.0}, {"name": "イグザレルトＯＤ錠１０ｍｇ", "target": 317.6, "generic": 143.0}, {"name": "イグザレルトＯＤ錠１５ｍｇ", "target": 418.9, "generic": 200.0}, {"name": "パナルジン錠１００ｍｇ", "target": 11.0, "generic": 10.8}, {"name": "プレタールＯＤ錠５０ｍｇ", "target": 15.2, "generic": 10.8}, {"name": "プレタールＯＤ錠１００ｍｇ", "target": 18.0, "generic": 13.9}, {"name": "エパデールカプセル３００", "target": 19.5, "generic": 14.6}, {"name": "エパデールＳ３００", "target": 19.4, "generic": 15.1}, {"name": "エパデールＳ６００", "target": 32.8, "generic": 29.4}, {"name": "エパデールＳ９００", "target": 42.5, "generic": 41.2}, {"name": "アンプラーグ錠５０ｍｇ", "target": 29.3, "generic": 28.5}, {"name": "アンプラーグ錠１００ｍｇ", "target": 43.7, "generic": 34.2}, {"name": "プラビックス錠２５ｍｇ", "target": 18.7, "generic": 12.6}, {"name": "プラビックス錠７５ｍｇ", "target": 40.9, "generic": 28.3}, {"name": "タチオン錠１００ｍｇ", "target": 12.4, "generic": 10.1}, {"name": "ユーゼル錠２５ｍｇ", "target": 530.5, "generic": 455.6}, {"name": "ロイコボリン錠２５ｍｇ", "target": 892.8, "generic": 455.6}, {"name": "ノベルジン顆粒５％", "target": 402.2, "generic": 186.0}, {"name": "ノベルジン錠２５ｍｇ", "target": 201.1, "generic": 81.5}, {"name": "ノベルジン錠５０ｍｇ", "target": 321.6, "generic": 126.6}, {"name": "ジャドニュ顆粒分包３６０ｍｇ", "target": 1528.8, "generic": 1173.0}, {"name": "ユリノーム錠２５ｍｇ", "target": 7.1, "generic": 6.3}, {"name": "ユリノーム錠５０ｍｇ", "target": 9.5, "generic": 6.3}, {"name": "フェブリク錠１０ｍｇ", "target": 12.4, "generic": 6.3}, {"name": "フェブリク錠２０ｍｇ", "target": 24.9, "generic": 10.8}, {"name": "フェブリク錠４０ｍｇ", "target": 40.0, "generic": 17.0}, {"name": "オイグルコン錠２．５ｍｇ", "target": 7.4, "generic": 6.3}, {"name": "アマリール３ｍｇ錠", "target": 16.6, "generic": 10.8}, {"name": "アマリール０．５ｍｇ錠", "target": 10.8, "generic": 10.5}, {"name": "ベイスン錠０．２", "target": 12.8, "generic": 10.8}, {"name": "ベイスン錠０．３", "target": 12.9, "generic": 10.8}, {"name": "ファスティック錠９０", "target": 17.5, "generic": 14.9}, {"name": "アクトス錠１５", "target": 16.3, "generic": 10.8}, {"name": "アクトス錠３０", "target": 29.9, "generic": 29.8}, {"name": "アクトスＯＤ錠１５", "target": 16.3, "generic": 10.8}, {"name": "アクトスＯＤ錠３０", "target": 29.9, "generic": 18.7}, {"name": "グルファストＯＤ錠５ｍｇ", "target": 10.8, "generic": 8.8}, {"name": "グルファストＯＤ錠１０ｍｇ", "target": 16.9, "generic": 12.5}, {"name": "セイブル錠５０ｍｇ", "target": 17.5, "generic": 10.8}, {"name": "セイブル錠７５ｍｇ", "target": 23.1, "generic": 14.9}, {"name": "セイブルＯＤ錠５０ｍｇ", "target": 17.5, "generic": 10.8}, {"name": "セイブルＯＤ錠７５ｍｇ", "target": 23.1, "generic": 14.9}, {"name": "エクア錠５０ｍｇ", "target": 38.7, "generic": 16.0}, {"name": "オングリザ錠２．５ｍｇ", "target": 40.5, "generic": 24.4}, {"name": "オングリザ錠５ｍｇ", "target": 60.6, "generic": 36.5}, {"name": "エクメット配合錠ＬＤ", "target": 42.0, "generic": 22.7}, {"name": "エクメット配合錠ＨＤ", "target": 41.2, "generic": 22.5}, {"name": "ネオーラル１０ｍｇカプセル", "target": 36.6, "generic": 27.3}, {"name": "ネオーラル２５ｍｇカプセル", "target": 77.2, "generic": 53.5}, {"name": "ネオーラル５０ｍｇカプセル", "target": 122.6, "generic": 88.5}, {"name": "プログラフカプセル１ｍｇ", "target": 305.4, "generic": 153.5}, {"name": "プログラフカプセル０．５ｍｇ", "target": 179.2, "generic": 90.0}, {"name": "プログラフカプセル５ｍｇ", "target": 1181.5, "generic": 603.7}, {"name": "リウマトレックスカプセル２ｍｇ", "target": 77.9, "generic": 59.4}, {"name": "アクトネル錠１７．５ｍｇ", "target": 165.3, "generic": 87.8}, {"name": "ベネット錠１７．５ｍｇ", "target": 165.3, "generic": 87.8}, {"name": "アクトネル錠７５ｍｇ", "target": 731.0, "generic": 292.4}, {"name": "ベネット錠７５ｍｇ", "target": 731.0, "generic": 292.4}, {"name": "エビスタ錠６０ｍｇ", "target": 43.0, "generic": 23.3}, {"name": "ピレスパ錠２００ｍｇ", "target": 280.6, "generic": 110.4}, {"name": "ボノテオ錠１ｍｇ", "target": 41.6, "generic": 33.6}, {"name": "リカルボン錠１ｍｇ", "target": 45.1, "generic": 33.6}, {"name": "ボノテオ錠５０ｍｇ", "target": 1046.9, "generic": 472.8}, {"name": "リカルボン錠５０ｍｇ", "target": 1114.3, "generic": 472.8}, {"name": "ビビアント錠２０ｍｇ", "target": 42.3, "generic": 25.7}, {"name": "ケアラム錠２５ｍｇ", "target": 73.7, "generic": 32.2}, {"name": "エルカルチンＦＦ錠１００ｍｇ", "target": 44.5, "generic": 28.6}, {"name": "エルカルチンＦＦ錠２５０ｍｇ", "target": 132.2, "generic": 73.0}, {"name": "プラケニル錠２００ｍｇ", "target": 238.5, "generic": 127.3}, {"name": "ゼローダ錠３００", "target": 107.3, "generic": 64.8}, {"name": "ティーエスワン配合ＯＤ錠Ｔ２０", "target": 220.8, "generic": 113.0}, {"name": "ティーエスワン配合ＯＤ錠Ｔ２５", "target": 301.0, "generic": 171.2}, {"name": "ティーエスワン配合カプセルＴ２０", "target": 220.8, "generic": 101.8}, {"name": "ティーエスワン配合カプセルＴ２５", "target": 301.0, "generic": 80.2}, {"name": "ノルバデックス錠２０ｍｇ", "target": 40.5, "generic": 27.0}, {"name": "オダイン錠１２５ｍｇ", "target": 70.4, "generic": 46.9}, {"name": "フェアストン錠４０", "target": 101.7, "generic": 78.5}, {"name": "カソデックスＯＤ錠８０ｍｇ", "target": 111.5, "generic": 97.1}, {"name": "グリベック錠１００ｍｇ", "target": 1131.8, "generic": 474.1}, {"name": "アロマシン錠２５ｍｇ", "target": 111.4, "generic": 102.4}, {"name": "イレッサ錠２５０", "target": 1716.1, "generic": 1135.1}, {"name": "スプリセル錠２０ｍｇ", "target": 2359.8, "generic": 903.4}, {"name": "スプリセル錠５０ｍｇ", "target": 5070.5, "generic": 2154.8}, {"name": "レブラミドカプセル５ｍｇ", "target": 8005.5, "generic": 3590.6}, {"name": "レブラミドカプセル２．５ｍｇ", "target": 6762.4, "generic": 3137.8}, {"name": "ポララミンシロップ０．０４％", "target": 14.4, "generic": 8.2}, {"name": "タベジール錠１ｍｇ", "target": 6.4, "generic": 6.3}, {"name": "タベジールシロップ０．０１％", "target": 17.6, "generic": 11.7}, {"name": "ザジテンドライシロップ０．１％", "target": 8.3, "generic": 6.9}, {"name": "アゼプチン錠０．５ｍｇ", "target": 7.8, "generic": 6.1}, {"name": "アゼプチン錠１ｍｇ", "target": 7.3, "generic": 6.3}, {"name": "ペミラストン錠５ｍｇ", "target": 12.1, "generic": 10.9}, {"name": "オノンドライシロップ１０％", "target": 31.3, "generic": 29.8}, {"name": "エバステル錠１０ｍｇ", "target": 30.6, "generic": 20.4}, {"name": "エバステルＯＤ錠５ｍｇ", "target": 24.5, "generic": 16.3}, {"name": "エバステルＯＤ錠１０ｍｇ", "target": 30.6, "generic": 20.4}, {"name": "ジルテックドライシロップ１．２５％", "target": 73.8, "generic": 65.7}, {"name": "タリオン錠５ｍｇ", "target": 14.8, "generic": 10.8}, {"name": "タリオン錠１０ｍｇ", "target": 16.6, "generic": 10.8}, {"name": "タリオンＯＤ錠５ｍｇ", "target": 14.8, "generic": 10.8}, {"name": "タリオンＯＤ錠１０ｍｇ", "target": 16.6, "generic": 10.8}, {"name": "アレロック顆粒０．５％", "target": 22.7, "generic": 20.1}, {"name": "アレロック錠２．５", "target": 13.6, "generic": 10.8}, {"name": "アレロック錠５", "target": 16.8, "generic": 10.8}, {"name": "アレロックＯＤ錠２．５", "target": 13.6, "generic": 10.8}, {"name": "アレロックＯＤ錠５", "target": 16.8, "generic": 10.8}, {"name": "キプレス細粒４ｍｇ", "target": 56.3, "generic": 32.4}, {"name": "シングレア細粒４ｍｇ", "target": 56.3, "generic": 32.4}, {"name": "キプレスチュアブル錠５ｍｇ", "target": 41.3, "generic": 24.0}, {"name": "シングレアチュアブル錠５ｍｇ", "target": 41.3, "generic": 24.0}, {"name": "キプレス錠１０ｍｇ", "target": 41.9, "generic": 31.5}, {"name": "シングレア錠１０ｍｇ", "target": 41.9, "generic": 31.5}, {"name": "キプレス錠５ｍｇ", "target": 42.2, "generic": 29.7}, {"name": "シングレア錠５ｍｇ", "target": 46.0, "generic": 29.7}, {"name": "キプレスＯＤ錠１０ｍｇ", "target": 41.9, "generic": 31.5}, {"name": "シングレアＯＤ錠１０ｍｇ", "target": 41.9, "generic": 31.5}, {"name": "クラリチン錠１０ｍｇ", "target": 25.9, "generic": 13.9}, {"name": "クラリチンレディタブ錠１０ｍｇ", "target": 25.9, "generic": 13.9}, {"name": "クラリチンドライシロップ１％", "target": 47.0, "generic": 26.1}, {"name": "ザイザル錠５ｍｇ", "target": 32.0, "generic": 13.4}, {"name": "ディレグラ配合錠", "target": 24.7, "generic": 20.8}, {"name": "バナン錠１００ｍｇ", "target": 36.4, "generic": 35.3}, {"name": "セフゾン細粒小児用１０％", "target": 55.3, "generic": 44.8}, {"name": "ルリッド錠１５０", "target": 18.7, "generic": 18.3}, {"name": "クラリシッド錠５０ｍｇ小児用", "target": 16.9, "generic": 13.9}, {"name": "クラリス錠５０小児用", "target": 16.9, "generic": 13.9}, {"name": "ジスロマック細粒小児用１０％", "target": 113.2, "generic": 59.2}, {"name": "ジスロマック錠２５０ｍｇ", "target": 115.0, "generic": 90.5}, {"name": "ブイフェンド錠５０ｍｇ", "target": 236.3, "generic": 131.1}, {"name": "ブイフェンド錠２００ｍｇ", "target": 868.3, "generic": 513.8}, {"name": "オゼックス細粒小児用１５％", "target": 256.5, "generic": 102.6}, {"name": "クラビット細粒１０％", "target": 32.5, "generic": 26.2}, {"name": "ザイボックス錠６００ｍｇ", "target": 5243.9, "generic": 4077.2}, {"name": "ゾビラックス顆粒４０％", "target": 51.7, "generic": 39.8}, {"name": "タミフルカプセル７５", "target": 172.3, "generic": 108.0}, {"name": "タミフルドライシロップ３％", "target": 103.0, "generic": 75.9}, {"name": "バラクルード錠０．５ｍｇ", "target": 165.2, "generic": 122.7}, {"name": "ファムビル錠２５０ｍｇ", "target": 180.2, "generic": 72.7}, {"name": "エプジコム配合錠", "target": 1788.4, "generic": 645.7}, {"name": "イトリゾールカプセル５０", "target": 85.4, "generic": 55.1}, {"name": "プレセデックス静注液２００μｇ「ファイザー」", "target": 2154.0, "generic": 1434.0}, {"name": "プレセデックス静注液２００μｇ／５０ｍＬシリンジ「ファイザー」", "target": 1927.0, "generic": 1877.0}, {"name": "ネオビタカイン注２ｍＬ", "target": 186.0, "generic": 63.0}, {"name": "ネオビタカイン注５ｍＬ", "target": 226.0, "generic": 63.0}, {"name": "ラジカット注３０ｍｇ", "target": 1731.0, "generic": 1350.0}, {"name": "ラジカット点滴静注バッグ３０ｍｇ", "target": 1731.0, "generic": 1468.0}, {"name": "キシロカイン注ポリアンプ２％", "target": 117.0, "generic": 104.0}, {"name": "ジプロフィリン注３００ｍｇ「エーザイ」", "target": 95.0, "generic": 63.0}, {"name": "イノバン注１００ｍｇ", "target": 182.0, "generic": 151.0}, {"name": "ドブトレックス注射液１００ｍｇ", "target": 298.0, "generic": 251.0}, {"name": "ミルリーラ注射液１０ｍｇ", "target": 1969.0, "generic": 1326.0}, {"name": "ワソラン静注５ｍｇ", "target": 192.0, "generic": 167.0}, {"name": "アンカロン注１５０", "target": 1152.0, "generic": 768.0}, {"name": "ヘルベッサー注射用２５０", "target": 1419.0, "generic": 946.0}, {"name": "ヘルベッサー注射用１０", "target": 156.0, "generic": 104.0}, {"name": "ヘルベッサー注射用５０", "target": 411.0, "generic": 274.0}, {"name": "シグマート注２ｍｇ", "target": 138.0, "generic": 88.0}, {"name": "シグマート注１２ｍｇ", "target": 506.0, "generic": 350.0}, {"name": "シグマート注４８ｍｇ", "target": 1680.0, "generic": 1055.0}, {"name": "プロスタンディン点滴静注用５００μｇ", "target": 5934.0, "generic": 3956.0}, {"name": "プロスタンディン注射用２０μｇ", "target": 443.0, "generic": 295.0}, {"name": "パルクス注ディスポ１０μｇ", "target": 1482.0, "generic": 988.0}, {"name": "リプルキット注１０μｇ", "target": 1482.0, "generic": 988.0}, {"name": "スロンノンＨＩ注１０ｍｇ／２ｍＬ", "target": 1284.0, "generic": 1201.0}, {"name": "ノバスタンＨＩ注１０ｍｇ／２ｍＬ", "target": 1205.0, "generic": 1201.0}, {"name": "静注用フローラン０．５ｍｇ", "target": 6194.0, "generic": 3566.0}, {"name": "静注用フローラン１．５ｍｇ", "target": 12123.0, "generic": 6340.0}, {"name": "エリル点滴静注液３０ｍｇ", "target": 1693.0, "generic": 703.0}, {"name": "グリセオール注", "target": 706.0, "generic": 591.0}, {"name": "アネキセート注射液０．５ｍｇ", "target": 1492.0, "generic": 1005.0}, {"name": "タガメット注射液２００ｍｇ", "target": 78.0, "generic": 72.0}, {"name": "ガスター注射液１０ｍｇ", "target": 143.0, "generic": 104.0}, {"name": "ガスター注射液２０ｍｇ", "target": 140.0, "generic": 104.0}, {"name": "アロキシ静注０．７５ｍｇ", "target": 7411.0, "generic": 4129.0}, {"name": "アロキシ点滴静注バッグ０．７５ｍｇ", "target": 6826.0, "generic": 4363.0}, {"name": "リンデロン注２ｍｇ（０．４％）", "target": 166.0, "generic": 63.0}, {"name": "リンデロン注４ｍｇ（０．４％）", "target": 268.0, "generic": 82.0}, {"name": "リンデロン注２０ｍｇ（０．４％）", "target": 1256.0, "generic": 420.0}, {"name": "プロスタルモン・Ｆ注射液１０００", "target": 342.0, "generic": 228.0}, {"name": "サンドスタチン皮下注用５０μｇ", "target": 566.0, "generic": 428.0}, {"name": "サンドスタチン皮下注用１００μｇ", "target": 963.0, "generic": 663.0}, {"name": "リュープリン注射用キット１．８８ｍｇ", "target": 16187.0, "generic": 14429.0}, {"name": "リュープリン注射用キット３．７５ｍｇ", "target": 21354.0, "generic": 17056.0}, {"name": "リュープリンＳＲ注射用キット１１．２５ｍｇ", "target": 40500.0, "generic": 23774.0}, {"name": "オキサロール注２．５μｇ", "target": 422.0, "generic": 205.0}, {"name": "オキサロール注５μｇ", "target": 551.0, "generic": 265.0}, {"name": "オキサロール注１０μｇ", "target": 800.0, "generic": 324.0}, {"name": "ロカルトロール注０．５", "target": 528.0, "generic": 227.0}, {"name": "ロカルトロール注１", "target": 806.0, "generic": 339.0}, {"name": "アリナミンＦ５０注", "target": 104.0, "generic": 63.0}, {"name": "メチコバール注射液５００μｇ", "target": 92.0, "generic": 67.0}, {"name": "ネオラミン・スリービー液（静注用）", "target": 117.0, "generic": 63.0}, {"name": "強力ネオミノファーゲンシー静注２０ｍＬ", "target": 122.0, "generic": 63.0}, {"name": "強力ネオミノファーゲンシーＰ静注２０ｍＬ", "target": 122.0, "generic": 63.0}, {"name": "ブリディオン静注２００ｍｇ", "target": 5578.0, "generic": 2862.0}, {"name": "ブリディオン静注５００ｍｇ", "target": 15603.0, "generic": 6914.0}, {"name": "アデホス－Ｌコーワ注１０ｍｇ", "target": 68.0, "generic": 63.0}, {"name": "アデホス－Ｌコーワ注２０ｍｇ", "target": 69.0, "generic": 63.0}, {"name": "エルシトニン注４０単位", "target": 344.0, "generic": 229.0}, {"name": "エルシトニン注１０単位", "target": 95.0, "generic": 63.0}, {"name": "エルシトニン注２０Ｓ", "target": 134.0, "generic": 89.0}, {"name": "アルツディスポ関節注２５ｍｇ", "target": 663.0, "generic": 600.0}, {"name": "ボナロン点滴静注バッグ９００μｇ", "target": 2955.0, "generic": 1182.0}, {"name": "注射用エラスポール１００", "target": 2938.0, "generic": 1314.0}, {"name": "ゾメタ点滴静注４ｍｇ／５ｍＬ", "target": 7096.0, "generic": 5905.0}, {"name": "エルカルチンＦＦ静注１０００ｍｇシリンジ", "target": 772.0, "generic": 372.0}, {"name": "トレアキシン点滴静注液１００ｍｇ／４ｍＬ", "target": 66868.0, "generic": 23450.0}, {"name": "キロサイドＮ注１ｇ", "target": 3622.0, "generic": 3207.0}, {"name": "アリムタ注射用５００ｍｇ", "target": 75061.0, "generic": 36314.0}, {"name": "アリムタ注射用１００ｍｇ", "target": 18621.0, "generic": 9551.0}, {"name": "アドリアシン注用１０", "target": 1939.0, "generic": 612.0}, {"name": "アドリアシン注用５０", "target": 6210.0, "generic": 2730.0}, {"name": "ベプシド注１００ｍｇ", "target": 2469.0, "generic": 2309.0}, {"name": "ワンタキソテール点滴静注２０ｍｇ／１ｍＬ", "target": 4622.0, "generic": 2536.0}, {"name": "ワンタキソテール点滴静注８０ｍｇ／４ｍＬ", "target": 16163.0, "generic": 8792.0}, {"name": "パラプラチン注射液４５０ｍｇ", "target": 7514.0, "generic": 7325.0}, {"name": "エルプラット点滴静注液２００ｍｇ", "target": 21535.0, "generic": 16680.0}, {"name": "ベルケイド注射用３ｍｇ", "target": 66114.0, "generic": 26076.0}, {"name": "ビダーザ注射用１００ｍｇ", "target": 19862.0, "generic": 11003.0}, {"name": "キュビシン静注用３５０ｍｇ", "target": 8154.0, "generic": 4543.0}, {"name": "ゾシン配合点滴静注用バッグ４．５", "target": 1724.0, "generic": 1722.0}, {"name": "ファンガード点滴用５０ｍｇ", "target": 2472.0, "generic": 1499.0}, {"name": "ファンガード点滴用７５ｍｇ", "target": 3965.0, "generic": 2509.0}, {"name": "クラビット点滴静注５００ｍｇ／２０ｍＬ", "target": 2825.0, "generic": 1709.0}, {"name": "クラビット点滴静注バッグ５００ｍｇ／１００ｍＬ", "target": 2026.0, "generic": 1695.0}, {"name": "ザイボックス注射液６００ｍｇ", "target": 8596.0, "generic": 6316.0}, {"name": "デノシン点滴静注用５００ｍｇ", "target": 9360.0, "generic": 3744.0}, {"name": "ヒルトニン０．５ｍｇ注射液", "target": 521.0, "generic": 361.0}, {"name": "ヒルトニン１ｍｇ注射液", "target": 1247.0, "generic": 828.0}, {"name": "ヒルトニン２ｍｇ注射液", "target": 2580.0, "generic": 1714.0}, {"name": "プロハンス静注シリンジ１３ｍＬ", "target": 3757.0, "generic": 2944.0}, {"name": "プロハンス静注シリンジ１７ｍＬ", "target": 4260.0, "generic": 3813.0}, {"name": "マグネスコープ静注３８％シリンジ１０ｍＬ", "target": 3444.0, "generic": 1969.0}, {"name": "マグネスコープ静注３８％シリンジ１５ｍＬ", "target": 4537.0, "generic": 2707.0}, {"name": "マグネスコープ静注３８％シリンジ２０ｍＬ", "target": 6362.0, "generic": 3280.0}, {"name": "マグネスコープ静注３８％シリンジ１１ｍＬ", "target": 3474.0, "generic": 2230.0}, {"name": "マグネスコープ静注３８％シリンジ１３ｍＬ", "target": 4177.0, "generic": 2407.0}, {"name": "オキファスト注１０ｍｇ", "target": 271.0, "generic": 137.0}, {"name": "オキファスト注５０ｍｇ", "target": 1340.0, "generic": 638.0}, {"name": "アルチバ静注用２ｍｇ", "target": 1682.0, "generic": 917.0}, {"name": "アルチバ静注用５ｍｇ", "target": 3462.0, "generic": 1980.0}, {"name": "セボフレン吸入麻酔液", "target": 26.4, "generic": 24.4}, {"name": "カロナール坐剤小児用５０", "target": 26.5, "generic": 21.6}, {"name": "カロナール坐剤１００", "target": 26.5, "generic": 21.6}, {"name": "カロナール坐剤２００", "target": 30.7, "generic": 21.6}, {"name": "イクセロンパッチ４．５ｍｇ", "target": 118.6, "generic": 84.4}, {"name": "リバスタッチパッチ４．５ｍｇ", "target": 141.1, "generic": 84.4}, {"name": "イクセロンパッチ９ｍｇ", "target": 131.4, "generic": 91.6}, {"name": "リバスタッチパッチ９ｍｇ", "target": 158.3, "generic": 91.6}, {"name": "イクセロンパッチ１３．５ｍｇ", "target": 133.4, "generic": 103.0}, {"name": "リバスタッチパッチ１３．５ｍｇ", "target": 160.3, "generic": 103.0}, {"name": "イクセロンパッチ１８ｍｇ", "target": 143.9, "generic": 88.7}, {"name": "リバスタッチパッチ１８ｍｇ", "target": 169.7, "generic": 88.7}, {"name": "サンテゾーン点眼液（０．１％）", "target": 33.9, "generic": 24.5}, {"name": "フルメトロン点眼液０．１％", "target": 26.3, "generic": 19.1}, {"name": "リンデロン点眼・点耳・点鼻液０．１％", "target": 44.0, "generic": 32.2}, {"name": "ミケラン点眼液１％", "target": 87.0, "generic": 58.0}, {"name": "ミケラン点眼液２％", "target": 104.9, "generic": 73.0}, {"name": "ミケランＬＡ点眼液１％", "target": 196.7, "generic": 100.0}, {"name": "ミケランＬＡ点眼液２％", "target": 235.8, "generic": 124.7}, {"name": "チモプトール点眼液０．５％", "target": 69.5, "generic": 46.3}, {"name": "チモプトールＸＥ点眼液０．２５％", "target": 205.7, "generic": 169.6}, {"name": "チモプトールＸＥ点眼液０．５％", "target": 307.3, "generic": 205.1}, {"name": "リズモンＴＧ点眼液０．２５％", "target": 223.8, "generic": 169.6}, {"name": "リズモンＴＧ点眼液０．５％", "target": 266.4, "generic": 205.1}, {"name": "サンコバ点眼液０．０２％", "target": 94.8, "generic": 92.3}, {"name": "ヒアレイン点眼液０．１％", "target": 192.9, "generic": 134.6}, {"name": "オペガン１．１眼粘弾剤１％", "target": 4917.0, "generic": 4439.3}, {"name": "ヒアレイン点眼液０．３％", "target": 235.2, "generic": 178.1}, {"name": "ジクロード点眼液０．１％", "target": 34.1, "generic": 24.3}, {"name": "ザジテン点眼液０．０５％", "target": 214.5, "generic": 144.2}, {"name": "アレギサール点眼液０．１％", "target": 294.5, "generic": 209.6}, {"name": "トラメラスＰＦ点眼液０．５％", "target": 243.2, "generic": 182.6}, {"name": "リザベン点眼液０．５％", "target": 252.9, "generic": 182.6}, {"name": "トラメラス点眼液０．５％", "target": 271.5, "generic": 182.6}, {"name": "ニプラノール点眼液０．２５％", "target": 130.8, "generic": 105.0}, {"name": "ハイパジールコーワ点眼液０．２５％", "target": 149.0, "generic": 105.0}, {"name": "クラビット点眼液０．５％", "target": 42.6, "generic": 21.8}, {"name": "クラビット点眼液１．５％", "target": 41.6, "generic": 25.9}, {"name": "ブロナック点眼液０．１％", "target": 55.4, "generic": 27.7}, {"name": "リボスチン点眼液０．０２５％", "target": 62.7, "generic": 41.8}, {"name": "エイゾプト懸濁性点眼液１％", "target": 132.3, "generic": 79.5}, {"name": "パタノール点眼液０．１％", "target": 74.1, "generic": 44.6}, {"name": "ベガモックス点眼液０．５％", "target": 50.3, "generic": 26.3}, {"name": "トラバタンズ点眼液０．００４％", "target": 305.1, "generic": 207.5}, {"name": "タプロス点眼液０．００１５％", "target": 458.9, "generic": 242.2}, {"name": "ルミガン点眼液０．０３％", "target": 315.1, "generic": 177.6}, {"name": "アイファガン点眼液０．１％", "target": 239.4, "generic": 74.2}, {"name": "アレジオン点眼液０．０５％", "target": 168.3, "generic": 89.0}, {"name": "アレジオンＬＸ点眼液０．１％", "target": 465.3, "generic": 228.3}, {"name": "ザラカム配合点眼液", "target": 468.0, "generic": 205.9}, {"name": "コソプト配合点眼液", "target": 221.0, "generic": 88.4}, {"name": "デュオトラバ配合点眼液", "target": 441.0, "generic": 286.3}, {"name": "ザジテン点鼻液０．０５％", "target": 338.1, "generic": 225.4}, {"name": "ナゾネックス点鼻液５０μｇ５６噴霧用", "target": 643.9, "generic": 361.2}, {"name": "ナゾネックス点鼻液５０μｇ１１２噴霧用", "target": 1157.8, "generic": 707.3}, {"name": "アラミスト点鼻液２７．５μｇ５６噴霧用", "target": 746.3, "generic": 526.4}, {"name": "アラミスト点鼻液２７．５μｇ１２０噴霧用", "target": 1358.2, "generic": 1061.9}, {"name": "フランドルテープ４０ｍｇ", "target": 32.2, "generic": 24.4}, {"name": "ホクナリンテープ１ｍｇ", "target": 23.5, "generic": 22.8}, {"name": "ホクナリンテープ２ｍｇ", "target": 35.9, "generic": 31.9}, {"name": "パルミコート吸入液０．２５ｍｇ", "target": 84.0, "generic": 34.6}, {"name": "パルミコート吸入液０．５ｍｇ", "target": 114.9, "generic": 51.4}, {"name": "シムビコートタービュヘイラー３０吸入", "target": 1242.2, "generic": 746.3}, {"name": "シムビコートタービュヘイラー６０吸入", "target": 2042.3, "generic": 1176.1}, {"name": "アフタゾロン口腔用軟膏０．１％", "target": 66.0, "generic": 35.3}, {"name": "ナウゼリン坐剤１０", "target": 28.6, "generic": 21.6}, {"name": "ナウゼリン坐剤３０", "target": 44.9, "generic": 35.1}, {"name": "アデスタン腟錠３００ｍｇ", "target": 163.3, "generic": 139.4}, {"name": "オキナゾール腟錠１００ｍｇ", "target": 39.8, "generic": 35.1}, {"name": "オキナゾール腟錠６００ｍｇ", "target": 261.4, "generic": 232.6}, {"name": "イソジンスクラブ液７．５％", "target": 36.4, "generic": 23.2}, {"name": "イソジンゲル１０％", "target": 38.2, "generic": 32.9}, {"name": "イソジン液１０％", "target": 24.0, "generic": 13.9}, {"name": "イソジンフィールド液１０％", "target": 36.1, "generic": 18.6}, {"name": "アクアチムクリーム１％", "target": 18.5, "generic": 17.0}, {"name": "アクアチムローション１％", "target": 18.5, "generic": 17.0}, {"name": "リンデロン－Ｖ軟膏０．１２％", "target": 14.3, "generic": 8.0}, {"name": "ベトネベート軟膏０．１２％", "target": 17.8, "generic": 8.0}, {"name": "リンデロン－Ｖクリーム０．１２％", "target": 14.3, "generic": 6.3}, {"name": "ベトネベートクリーム０．１２％", "target": 17.8, "generic": 6.3}, {"name": "リンデロン－Ｖローション", "target": 14.3, "generic": 8.0}, {"name": "レダコート軟膏０．１％", "target": 14.6, "generic": 3.7}, {"name": "トプシム軟膏０．０５％", "target": 10.8, "generic": 10.2}, {"name": "トプシムＥクリーム０．０５％", "target": 10.8, "generic": 10.2}, {"name": "トプシムクリーム０．０５％", "target": 10.8, "generic": 10.2}, {"name": "フルコート軟膏０．０２５％", "target": 14.0, "generic": 10.8}, {"name": "メサデルム軟膏０．１％", "target": 9.2, "generic": 6.5}, {"name": "メサデルムクリーム０．１％", "target": 9.2, "generic": 6.5}, {"name": "メサデルムローション０．１％", "target": 9.2, "generic": 6.5}, {"name": "モーラステープ２０ｍｇ", "target": 18.1, "generic": 18.0}, {"name": "モーラステープＬ４０ｍｇ", "target": 26.6, "generic": 25.7}, {"name": "モーラスパップＸＲ１２０ｍｇ", "target": 27.3, "generic": 18.2}, {"name": "ナパゲルンローション３％", "target": 4.4, "generic": 2.6}, {"name": "ナボールゲル１％", "target": 5.3, "generic": 3.1}, {"name": "ボルタレンゲル１％", "target": 3.2, "generic": 3.1}, {"name": "ボルタレンローション１％", "target": 3.2, "generic": 3.1}, {"name": "ヒルドイドゲル０．３％", "target": 10.3, "generic": 7.8}, {"name": "エンペシドクリーム１％", "target": 9.7, "generic": 8.1}, {"name": "マイコスポールクリーム１％", "target": 12.8, "generic": 10.9}, {"name": "ニゾラールクリーム２％", "target": 14.5, "generic": 12.5}, {"name": "ルリコン軟膏１％", "target": 28.2, "generic": 14.9}, {"name": "ルリコンクリーム１％", "target": 28.2, "generic": 14.9}, {"name": "ラミシールクリーム１％", "target": 15.8, "generic": 10.8}, {"name": "ラミシール外用液１％", "target": 15.8, "generic": 10.8}, {"name": "ウレパールクリーム１０％", "target": 4.0, "generic": 2.9}, {"name": "パスタロンクリーム２０％", "target": 4.3, "generic": 3.3}, {"name": "ケラチナミンコーワクリーム２０％", "target": 4.1, "generic": 3.3}, {"name": "オキサロール軟膏２５μｇ／ｇ", "target": 39.2, "generic": 30.1}, {"name": "プロトピック軟膏０．１％", "target": 47.0, "generic": 31.1}, {"name": "ディフェリンゲル０．１％", "target": 40.1, "generic": 21.2}, {"name": "ヒルドイドソフト軟膏０．３％", "target": 17.7, "generic": 6.3}, {"name": "ヒルドイドクリーム０．３％", "target": 17.7, "generic": 6.3}, {"name": "ヒルドイドローション０．３％", "target": 17.7, "generic": 6.3}, {"name": "ヒルドイドフォーム０．３％", "target": 18.2, "generic": 10.9}, {"name": "アラセナ－Ａ軟膏３％", "target": 104.7, "generic": 69.8}, {"name": "アラセナ－Ａクリーム３％", "target": 104.7, "generic": 69.8}, {"name": "ゾビラックス軟膏５％", "target": 90.6, "generic": 60.4}, {"name": "ゾビラックスクリーム５％", "target": 90.6, "generic": 60.4}, {"name": "クレナフィン爪外用液１０％", "target": 1312.5, "generic": 654.6}, {"name": "ワンデュロパッチ０．８４ｍｇ", "target": 444.7, "generic": 253.8}, {"name": "ワンデュロパッチ１．７ｍｇ", "target": 831.0, "generic": 462.4}, {"name": "ワンデュロパッチ３．４ｍｇ", "target": 1526.2, "generic": 874.4}, {"name": "ワンデュロパッチ５ｍｇ", "target": 2136.4, "generic": 1249.6}, {"name": "ワンデュロパッチ６．７ｍｇ", "target": 2927.1, "generic": 1575.1}, {"name": "ペリオクリン歯科用軟膏", "target": 501.4, "generic": 491.9}];
+
+    // サンプルデータ
     const sampleData = [
         { name: 'サンプル内服薬 (例1相当)', type: 'internal', targetPrice: 100.00, genericPrice: 60.00, dayQty: 1, qty: 30 },
         { name: 'サンプル外用テープ (例4相当)', type: 'external', targetPrice: 26.60, genericPrice: 25.70, dayQty: '', qty: 35 }
     ];
 
-    // 点数化ルール（15円以下=1点、15円超〜25円以下=2点、25円超〜35円以下=3点...）
+    // 全角・半角の正規化
+    function normalizeString(str) {
+        return str.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function(s) {
+            return String.fromCharCode(s.charCodeAt(0) - 0xFEE0);
+        }).toLowerCase();
+    }
+
+    // サジェストの表示と位置調整
+    function handleSearch(inputElem) {
+        const suggestBox = document.getElementById('global-suggest-box');
+        const rawQuery = inputElem.value.trim();
+        const query = normalizeString(rawQuery);
+        
+        if (query.length === 0) {
+            suggestBox.style.display = 'none';
+            return;
+        }
+
+        // 検索にマッチするものを抽出 (最大30件)
+        const matches = drugDatabase.filter(d => normalizeString(d.name).includes(query)).slice(0, 30);
+
+        if (matches.length === 0) {
+            suggestBox.style.display = 'none';
+            return;
+        }
+
+        suggestBox.innerHTML = '';
+        matches.forEach(match => {
+            const div = document.createElement('div');
+            div.className = 'suggest-item';
+            div.innerHTML = `
+                <div style="font-weight: 500;">${match.name}</div>
+                <div class="suggest-item-prices">先発: ¥${match.target.toFixed(2)} / 後発: ¥${match.generic.toFixed(2)}</div>
+            `;
+            
+            // クリック選択時の処理
+            div.onmousedown = (e) => {
+                e.preventDefault(); 
+                inputElem.value = match.name;
+                
+                const row = inputElem.closest('tr');
+                const targetInput = row.querySelector('.price-target');
+                const genericInput = row.querySelector('.price-generic');
+                
+                targetInput.value = match.target;
+                genericInput.value = match.generic;
+                
+                // 薬価を固定（編集不可）にする
+                targetInput.readOnly = true;
+                genericInput.readOnly = true;
+                
+                suggestBox.style.display = 'none';
+                calculate();
+            };
+            suggestBox.appendChild(div);
+        });
+        
+        // テーブルのスクロールやカードのoverflowに影響されないよう、body基準で絶対位置を計算
+        const rect = inputElem.getBoundingClientRect();
+        suggestBox.style.top = (rect.bottom + window.scrollY) + 'px';
+        suggestBox.style.left = (rect.left + window.scrollX) + 'px';
+        suggestBox.style.width = rect.width + 'px';
+        suggestBox.style.display = 'block';
+    }
+
+    // ユーザーが手動で薬剤名を変更・消去した場合の処理
+    function handleNameInput(inputElem) {
+        const row = inputElem.closest('tr');
+        const targetInput = row.querySelector('.price-target');
+        const genericInput = row.querySelector('.price-generic');
+        
+        // テキストが変更されたら固定を解除する
+        targetInput.readOnly = false;
+        genericInput.readOnly = false;
+        
+        handleSearch(inputElem);
+    }
+
+    // フォーカスアウト時にサジェストを閉じる
+    function hideSuggestBox() {
+        document.getElementById('global-suggest-box').style.display = 'none';
+    }
+
+    // 点数化ルール
     function calculatePoints(amount) {
         if (amount <= 0) return 0;
         if (amount <= 15) return 1;
@@ -364,7 +500,7 @@
     }
 
     // 行を追加する関数
-    function addRow(data = { name: '', type: 'internal', targetPrice: '', genericPrice: '', dayQty: 1, qty: '' }) {
+    function addRow(data = { name: '', type: 'internal', targetPrice: '', genericPrice: '', dayQty: 1, qty: '' }, isSample = false) {
         const tbody = document.getElementById('drug-tbody');
         const rowId = 'row_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         
@@ -372,22 +508,25 @@
         tr.id = rowId;
         
         const isExternal = data.type === 'external';
+        // サンプル読み込み時は最初から固定、空行追加時は編集可能
+        const isReadOnly = isSample ? 'readonly' : '';
         
         tr.innerHTML = `
             <td>
-                <input type="text" class="drug-name" value="${data.name}" placeholder="お薬名など">
+                <input type="text" class="drug-name" value="${data.name}" placeholder="薬品名を入力..." 
+                       oninput="handleNameInput(this)" onfocus="handleSearch(this)" onblur="hideSuggestBox()" autocomplete="off">
             </td>
             <td>
                 <select class="drug-type" onchange="toggleFields(this); calculate();">
-                    <option value="internal" ${data.type === 'internal' ? 'selected' : ''}>内服薬</option>
-                    <option value="external" ${isExternal ? 'selected' : ''}>外用薬</option>
+                    <option value="internal" ${data.type === 'internal' ? 'selected' : ''}>内服</option>
+                    <option value="external" ${isExternal ? 'selected' : ''}>外用</option>
                 </select>
             </td>
             <td>
-                <input type="number" class="price-target" value="${data.targetPrice}" step="0.01" min="0" placeholder="0" oninput="calculate()">
+                <input type="number" class="price-target" value="${data.targetPrice}" step="0.01" min="0" placeholder="0" ${isReadOnly} oninput="calculate()">
             </td>
             <td>
-                <input type="number" class="price-generic" value="${data.genericPrice}" step="0.01" min="0" placeholder="0" oninput="calculate()">
+                <input type="number" class="price-generic" value="${data.genericPrice}" step="0.01" min="0" placeholder="0" ${isReadOnly} oninput="calculate()">
             </td>
             <td>
                 <input type="number" class="drug-day-qty" value="${isExternal ? '' : data.dayQty}" min="0.1" step="any" placeholder="1" ${isExternal ? 'disabled' : ''} oninput="calculate()">
@@ -415,7 +554,7 @@
         calculate();
     }
 
-    // 内服/外用切り替え時に入力制御とラベルを更新
+    // 内服/外用切り替え
     function toggleFields(selectElement) {
         const row = selectElement.closest('tr');
         const dayQtyInput = row.querySelector('.drug-day-qty');
@@ -435,15 +574,13 @@
         }
     }
 
-    // サンプルデータを読み込んで追加する関数
+    // サンプルデータを読み込んで追加
     function loadSampleData() {
-        // 現在の入力行をすべてリセット
         document.getElementById('drug-tbody').innerHTML = '';
-        // サンプルデータを投入
-        sampleData.forEach(data => addRow(data));
+        sampleData.forEach(data => addRow(data, true));
     }
 
-    // 主な計算ロジック
+    // 計算ロジック
     function calculate() {
         const rows = document.querySelectorAll('#drug-tbody tr');
         let totalPointsOld = 0;
@@ -500,9 +637,14 @@
         }
     }
 
-    // 起動時は何も行を追加しない（空の状態）
+    // ウィンドウリサイズ時やスクロール時にサジェスト位置がずれないように非表示にする
+    window.onresize = hideSuggestBox;
+    window.onscroll = hideSuggestBox;
+
+    // 起動時に初期状態で空の入力行を2行生成する
     window.onload = function() {
-        calculate();
+        addRow();
+        addRow();
     };
 </script>
 
