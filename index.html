@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>長期収載品 特別の料金（選定療養）シミュレーター</title>
     <style>
         :root {
@@ -34,6 +34,8 @@
             line-height: 1.6;
             padding: 20px;
             position: relative;
+            /* スマホで横揺れを防ぐ */
+            overflow-x: hidden;
         }
 
         .container {
@@ -54,6 +56,7 @@
             font-size: 20pt;
             font-weight: 700;
             margin-bottom: 8px;
+            line-height: 1.3;
         }
 
         header p {
@@ -85,12 +88,12 @@
         .button-group {
             display: flex;
             gap: 8px;
+            flex-wrap: wrap;
         }
 
-        /* テーブルスタイル */
+        /* テーブルスタイル（PC向けデフォルト） */
         .table-responsive {
-            overflow-x: auto;
-            /* 縦方向の隠れを防ぐためoverflow-yは指定しない。ただし固定配置サジェストを使うため影響なし */
+            width: 100%;
         }
 
         table {
@@ -116,14 +119,16 @@
         }
 
         /* フォームコントロール */
+        /* iOS Safariでのズームを防ぐため font-size: 16px を指定 */
         select, input {
             width: 100%;
-            padding: 8px 12px;
+            padding: 10px 12px;
             border: 1px solid var(--border-color);
             border-radius: 6px;
-            font-size: 10.5pt;
+            font-size: 16px; 
             color: var(--text-main);
             transition: border-color 0.2s;
+            background-color: #fff;
         }
 
         select:focus, input:focus {
@@ -142,7 +147,6 @@
             cursor: not-allowed;
         }
 
-        /* 薬価固定時の読み取り専用スタイル */
         input:read-only {
             background-color: #f8fafc;
             color: #4b5563;
@@ -150,25 +154,25 @@
             cursor: not-allowed;
         }
 
-        /* グローバル・サジェストボックス（最前面に浮き上がらせる） */
+        /* サジェストボックス */
         .suggest-box {
             position: absolute;
             z-index: 9999;
             background-color: white;
-            border: 1px solid #b91c1c; /* 識別しやすく、かつきれいに */
             border: 1px solid var(--border-color);
             border-radius: 6px;
-            max-height: 260px; /* 5-6件が完全に入る高さ */
+            max-height: 260px;
             overflow-y: auto;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
             display: none;
+            box-sizing: border-box;
         }
         
         .suggest-item {
-            padding: 10px 12px;
+            padding: 12px 14px;
             cursor: pointer;
             border-bottom: 1px solid var(--border-color);
-            font-size: 10pt;
+            font-size: 11pt;
             transition: background-color 0.1s;
         }
         
@@ -181,9 +185,9 @@
         }
         
         .suggest-item-prices {
-            font-size: 8.5pt;
+            font-size: 9pt;
             color: var(--text-muted);
-            margin-top: 2px;
+            margin-top: 4px;
         }
 
         /* ボタン */
@@ -192,7 +196,7 @@
             align-items: center;
             justify-content: center;
             padding: 10px 16px;
-            font-size: 10.5pt;
+            font-size: 11pt;
             font-weight: 500;
             border-radius: 6px;
             border: none;
@@ -230,8 +234,7 @@
         .btn-danger {
             background-color: var(--danger-color);
             color: white;
-            padding: 6px 12px;
-            font-size: 9.5pt;
+            padding: 8px 14px;
         }
 
         .btn-danger:hover {
@@ -251,6 +254,9 @@
             border-radius: 8px;
             border: 1px solid var(--border-color);
             text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
 
         .result-box.highlight {
@@ -270,7 +276,7 @@
         }
 
         .result-value {
-            font-size: 18pt;
+            font-size: 20pt;
             font-weight: 700;
             color: var(--text-main);
         }
@@ -281,10 +287,10 @@
 
         .status-badge {
             display: inline-block;
-            padding: 4px 12px;
+            padding: 6px 16px;
             border-radius: 50px;
             font-weight: 600;
-            font-size: 11pt;
+            font-size: 12pt;
         }
 
         .status-badge.has-diff {
@@ -300,27 +306,108 @@
         .info-note {
             background-color: var(--warning-light);
             border-left: 4px solid var(--warning-color);
-            padding: 12px 16px;
+            padding: 14px 16px;
             border-radius: 0 8px 8px 0;
-            font-size: 9.5pt;
+            font-size: 10pt;
             color: #92400e;
             margin-top: 16px;
         }
 
         .label-unit {
-            font-size: 8.5pt;
+            font-size: 9pt;
             color: var(--text-muted);
             display: block;
-            margin-top: 2px;
+            margin-top: 4px;
         }
 
+        /* ========================================================
+           スマートフォン向けレスポンシブデザイン（カード型レイアウト）
+           ======================================================== */
         @media (max-width: 768px) {
-            th, td {
-                padding: 8px;
-                font-size: 9.5pt;
+            body {
+                padding: 12px;
             }
-            .results-grid {
-                grid-template-columns: 1fr;
+            
+            header {
+                padding: 16px;
+            }
+            
+            header h1 {
+                font-size: 16pt;
+            }
+            
+            .card {
+                padding: 16px;
+            }
+
+            .button-group {
+                width: 100%;
+                margin-top: 8px;
+            }
+            
+            .button-group .btn {
+                flex: 1;
+            }
+
+            /* テーブルのブロック化（カード型へ変換） */
+            table, thead, tbody, th, td, tr {
+                display: block;
+            }
+
+            /* テーブルのヘッダーは隠す */
+            thead tr {
+                display: none;
+            }
+
+            /* 1行を1つのカードとしてスタイリング */
+            tbody tr {
+                background-color: #f8fafc;
+                border: 2px solid var(--border-color);
+                border-radius: 10px;
+                margin-bottom: 20px;
+                padding: 16px 12px;
+                position: relative;
+            }
+
+            /* 各セル（項目）の余白調整 */
+            td {
+                border-bottom: none;
+                padding: 6px 0 10px 0;
+            }
+
+            /* data-label 属性を使って、擬似的に見出しを表示する */
+            td::before {
+                content: attr(data-label);
+                display: block;
+                font-weight: 600;
+                font-size: 10pt;
+                color: var(--primary-color);
+                margin-bottom: 6px;
+            }
+
+            /* 削除ボタンだけ見た目を変更 */
+            td:last-child {
+                padding-bottom: 0;
+                margin-top: 8px;
+                border-top: 1px dashed var(--border-color);
+                padding-top: 16px;
+            }
+            
+            .btn-danger {
+                width: 100%;
+                padding: 12px;
+            }
+
+            /* 入力欄の下の単位ラベルの配置調整 */
+            .label-unit {
+                display: inline-block;
+                margin-top: 6px;
+                margin-left: 4px;
+            }
+            
+            /* サジェストの横幅がスマホ画面を超えないように */
+            .suggest-box {
+                max-width: calc(100vw - 24px);
             }
         }
     </style>
@@ -339,7 +426,7 @@
         <div class="card-title">
             <span>対象薬剤の入力</span>
             <div class="button-group">
-                <button type="button" class="btn btn-info" onclick="loadSampleData()">サンプルで計算</button>
+                <button type="button" class="btn btn-info" onclick="loadSampleData()">サンプル</button>
                 <button type="button" class="btn btn-secondary" onclick="addRow()">＋ 薬剤を追加</button>
             </div>
         </div>
@@ -370,18 +457,18 @@
         
         <div class="results-grid">
             <div class="result-box">
-                <div class="result-label">旧制度（1/4試算）の最終金額</div>
+                <div class="result-label">旧制度（1/4試算）</div>
                 <div class="result-value" id="total-old">¥0</div>
             </div>
             <div class="result-box highlight">
-                <div class="result-label">現行制度（1/2相当）の最終金額</div>
+                <div class="result-label">現行制度（1/2相当）</div>
                 <div class="result-value" id="total-current">¥0</div>
             </div>
             <div class="result-box warning">
-                <div class="result-label">最終金額の差（現行 − 旧）</div>
+                <div class="result-label">差額（現行 − 旧）</div>
                 <div class="result-value" id="total-diff">¥0</div>
             </div>
-            <div class="result-box" style="display: flex; flex-direction: column; justify-content: center; align-items: center;">
+            <div class="result-box">
                 <div class="result-label" style="margin-bottom: 8px;">金額の差の有無</div>
                 <div id="status-badge-container">
                     <span class="status-badge no-diff">なし</span>
@@ -392,7 +479,8 @@
         <div class="info-note">
             ※ 「薬剤名」に入力すると、R8年対象医薬品リストから自動サジェストされます。リストから薬剤を選択すると、薬価が固定され編集できなくなります（手動で文字を消す・変更すると再編集可能になります）。<br>
             ※ 内服薬の価格差は「1錠・1単位あたり」として計算されます。1日当たり複数錠服用する場合は「1日量」にその数量を入力してください。<br>
-            ※ 外用薬の場合、「1日量」は計算の対象外（入力不可）となり、処方された「全数量」に対して一括して端数処理（点数化）を行います。
+            ※ 外用薬および頓服薬の場合、「1日量」は計算の対象外（入力不可）となり、処方された「全数量」に対して一括して端数処理（点数化）を行います。<br>
+            ※ 選定療養の対象医薬品リストは<a href="https://www.mhlw.go.jp/stf/newpage_39830.html" target="_blank" rel="noopener noreferrer">厚生労働省のウェブサイト</a>で公開されているもの(令和８年３月３１日時点)を使用しています。
         </div>
     </div>
 </div>
@@ -441,12 +529,12 @@
             const div = document.createElement('div');
             div.className = 'suggest-item';
             div.innerHTML = `
-                <div style="font-weight: 500;">${match.name}</div>
+                <div style="font-weight: 600; color: #1e3a8a;">${match.name}</div>
                 <div class="suggest-item-prices">先発: ¥${match.target.toFixed(2)} / 後発: ¥${match.generic.toFixed(2)}</div>
             `;
             
-            // クリック選択時の処理
-            div.onmousedown = (e) => {
+            // クリック選択時の処理 (スマホ対応として mousedown と touchstart 両方補足)
+            const selectItem = (e) => {
                 e.preventDefault(); 
                 inputElem.value = match.name;
                 
@@ -464,14 +552,25 @@
                 suggestBox.style.display = 'none';
                 calculate();
             };
+
+            div.addEventListener('mousedown', selectItem);
+            div.addEventListener('touchstart', selectItem, {passive: false});
+            
             suggestBox.appendChild(div);
         });
         
-        // テーブルのスクロールやカードのoverflowに影響されないよう、body基準で絶対位置を計算
         const rect = inputElem.getBoundingClientRect();
-        suggestBox.style.top = (rect.bottom + window.scrollY) + 'px';
+        suggestBox.style.top = (rect.bottom + window.scrollY + 4) + 'px';
         suggestBox.style.left = (rect.left + window.scrollX) + 'px';
-        suggestBox.style.width = rect.width + 'px';
+        
+        // スマホ画面幅を超える場合は幅を調整
+        let boxWidth = rect.width;
+        if(window.innerWidth <= 768) {
+             // スマホ時は画面幅いっぱいにするか、要素の幅の大きい方に
+             boxWidth = Math.max(rect.width, window.innerWidth - 32); 
+             suggestBox.style.left = '16px'; // スマホ時の左端固定
+        }
+        suggestBox.style.width = boxWidth + 'px';
         suggestBox.style.display = 'block';
     }
 
@@ -490,7 +589,10 @@
 
     // フォーカスアウト時にサジェストを閉じる
     function hideSuggestBox() {
-        document.getElementById('global-suggest-box').style.display = 'none';
+        // タッチ操作による選択との競合を防ぐため、少し遅らせて非表示にする
+        setTimeout(() => {
+            document.getElementById('global-suggest-box').style.display = 'none';
+        }, 150);
     }
 
     // 点数化ルール
@@ -500,44 +602,51 @@
         return Math.ceil((amount - 15) / 10) + 1;
     }
 
-    // 行を追加する関数
-    function addRow(data = { name: '', type: 'internal', targetPrice: '', genericPrice: '', dayQty: 1, qty: '' }, isSample = false) {
+    // 行を追加する関数（スマホ向けに data-label 属性を追加）
+    function addRow(data = { name: '', type: 'internal', targetPrice: '', genericPrice: '', dayQty: '', qty: '' }, isSample = false) {
         const tbody = document.getElementById('drug-tbody');
         const rowId = 'row_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         
         const tr = document.createElement('tr');
         tr.id = rowId;
         
+        const isInternal = data.type === 'internal' || !data.type;
         const isExternal = data.type === 'external';
-        // サンプル読み込み時は最初から固定、空行追加時は編集可能
+        const isPrn = data.type === 'prn';
+        
         const isReadOnly = isSample ? 'readonly' : '';
         
+        let unitText = '処方日数 (日)';
+        if (isExternal) unitText = '全数量 (枚/本/g)';
+        if (isPrn) unitText = '全数量 (回分)';
+        
         tr.innerHTML = `
-            <td>
+            <td data-label="💊 薬剤名（品名検索）">
                 <input type="text" class="drug-name" value="${data.name}" placeholder="薬品名を入力..." 
                        oninput="handleNameInput(this)" onfocus="handleSearch(this)" onblur="hideSuggestBox()" autocomplete="off">
             </td>
-            <td>
+            <td data-label="🏷️ 区分">
                 <select class="drug-type" onchange="toggleFields(this); calculate();">
-                    <option value="internal" ${data.type === 'internal' ? 'selected' : ''}>内服</option>
+                    <option value="internal" ${isInternal ? 'selected' : ''}>内服</option>
                     <option value="external" ${isExternal ? 'selected' : ''}>外用</option>
+                    <option value="prn" ${isPrn ? 'selected' : ''}>頓服</option>
                 </select>
             </td>
-            <td>
+            <td data-label="💰 先発薬 価格 (円)">
                 <input type="number" class="price-target" value="${data.targetPrice}" step="0.01" min="0" placeholder="0" ${isReadOnly} oninput="calculate()">
             </td>
-            <td>
+            <td data-label="💸 後発薬 最高価格 (円)">
                 <input type="number" class="price-generic" value="${data.genericPrice}" step="0.01" min="0" placeholder="0" ${isReadOnly} oninput="calculate()">
             </td>
-            <td>
-                <input type="number" class="drug-day-qty" value="${isExternal ? '' : data.dayQty}" min="0.1" step="any" placeholder="1" ${isExternal ? 'disabled' : ''} oninput="calculate()">
-                <span class="label-unit day-qty-unit-text">${isExternal ? '---' : '1日量 (錠等)'}</span>
+            <td data-label="⚖️ 1日量 (内服のみ)">
+                <input type="number" class="drug-day-qty" value="${!isInternal ? '' : data.dayQty}" min="1" step="any"  ${!isInternal ? 'disabled' : ''} oninput="calculate()">
+                <span class="label-unit day-qty-unit-text">${!isInternal ? '---' : '1日量 (錠/mL/g)'}</span>
             </td>
-            <td>
-                <input type="number" class="drug-qty" value="${data.qty}" min="1" placeholder="30" oninput="calculate()">
-                <span class="label-unit type-unit-text">${isExternal ? '全数量 (枚/本/g)' : '処方日数 (日)'}</span>
+            <td data-label="📅 日数 / 全数量">
+                <input type="number" class="drug-qty" value="${data.qty}" min="1"  oninput="calculate()">
+                <span class="label-unit type-unit-text">${unitText}</span>
             </td>
-            <td>
+            <td data-label="操作">
                 <button type="button" class="btn btn-danger" onclick="removeRow('${rowId}')">削除</button>
             </td>
         `;
@@ -555,23 +664,28 @@
         calculate();
     }
 
-    // 内服/外用切り替え
+    // 内服/外用/頓服 切り替え
     function toggleFields(selectElement) {
         const row = selectElement.closest('tr');
         const dayQtyInput = row.querySelector('.drug-day-qty');
         const dayQtyUnit = row.querySelector('.day-qty-unit-text');
         const qtyUnit = row.querySelector('.type-unit-text');
+        const val = selectElement.value;
         
-        if (selectElement.value === 'internal') {
+        if (val === 'internal') {
             dayQtyInput.disabled = false;
-            if(!dayQtyInput.value) dayQtyInput.value = '1';
-            dayQtyUnit.textContent = '1日量 (錠等)';
+            dayQtyUnit.textContent = '1日量 (錠/mL/g)';
             qtyUnit.textContent = '処方日数 (日)';
-        } else {
+        } else if (val === 'external') {
             dayQtyInput.disabled = true;
             dayQtyInput.value = '';
             dayQtyUnit.textContent = '---';
             qtyUnit.textContent = '全数量 (枚/本/g)';
+        } else if (val === 'prn') {
+            dayQtyInput.disabled = true;
+            dayQtyInput.value = '';
+            dayQtyUnit.textContent = '---';
+            qtyUnit.textContent = '全数量 (回分)';
         }
     }
 
@@ -612,6 +726,7 @@
                 totalPointsOld += pointsPerDayOld * qty;
                 totalPointsCurrent += pointsPerDayCurrent * qty;
             } else {
+                // external (外用) と prn (頓服)
                 const oldTotalAmount = basePriceDiff * 0.25 * qty;
                 const currentTotalAmount = basePriceDiff * 0.50 * qty;
 
@@ -638,11 +753,10 @@
         }
     }
 
-    // ウィンドウリサイズ時やスクロール時にサジェスト位置がずれないように非表示にする
     window.onresize = hideSuggestBox;
-    window.onscroll = hideSuggestBox;
+    // タッチデバイスでのスクロール時のチラつき防止
+    window.addEventListener('scroll', hideSuggestBox, { passive: true });
 
-    // 起動時に初期状態で空の入力行を2行生成する
     window.onload = function() {
         addRow();
         addRow();
