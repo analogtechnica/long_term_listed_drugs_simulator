@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>長期収載品 特別の料金（選定療養）シミュレーター</title>
+    <style>
+        :root {
+            --primary-color: #1e3a8a;
+            --primary-light: #eff6ff;
+            --secondary-color: #0d9488;
+            --secondary-light: #f0fdfa;
+            --warning-color: #d97706;
+            --warning-light: #fffbeb;
+            --danger-color: #dc2626;
+            --danger-light: #fef2f2;
+            --text-main: #1f2937;
+            --text-muted: #4b5563;
+            --bg-main: #f8fafc;
+            --bg-card: #ffffff;
+            --border-color: #e2e8f0;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans JP", sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary-color), #2563eb);
+            color: white;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        header h1 {
+            font-size: 20pt;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        header p {
+            font-size: 11pt;
+            opacity: 0.9;
+        }
+
+        .card {
+            background-color: var(--bg-card);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .card-title {
+            font-size: 14pt;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* テーブルスタイル */
+        .table-responsive {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            margin-bottom: 16px;
+        }
+
+        th {
+            background-color: var(--primary-light);
+            color: var(--primary-color);
+            padding: 12px;
+            font-weight: 600;
+            font-size: 10.5pt;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
+        }
+
+        /* フォームコントロール */
+        select, input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 10.5pt;
+            color: var(--text-main);
+            transition: border-color 0.2s;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.1);
+        }
+
+        input[type="number"] {
+            text-align: right;
+        }
+
+        input:disabled {
+            background-color: #f1f5f9;
+            color: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        /* ボタン */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 16px;
+            font-size: 10.5pt;
+            font-weight: 500;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #1d4ed8;
+        }
+
+        .btn-secondary {
+            background-color: #e2e8f0;
+            color: var(--text-main);
+        }
+
+        .btn-secondary:hover {
+            background-color: #cbd5e1;
+        }
+
+        .btn-info {
+            background-color: #e0f2fe;
+            color: #0369a1;
+        }
+
+        .btn-info:hover {
+            background-color: #bae6fd;
+        }
+
+        .btn-danger {
+            background-color: var(--danger-color);
+            color: white;
+            padding: 6px 12px;
+            font-size: 9.5pt;
+        }
+
+        .btn-danger:hover {
+            background-color: #b91c1c;
+        }
+
+        /* 結果セクション */
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .result-box {
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        .result-box.highlight {
+            background-color: var(--primary-light);
+            border-color: #93c5fd;
+        }
+
+        .result-box.warning {
+            background-color: var(--warning-light);
+            border-color: #fcd34d;
+        }
+
+        .result-label {
+            font-size: 10pt;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .result-value {
+            font-size: 18pt;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .result-value.diff-active {
+            color: var(--danger-color);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 11pt;
+        }
+
+        .status-badge.has-diff {
+            background-color: var(--danger-light);
+            color: var(--danger-color);
+        }
+
+        .status-badge.no-diff {
+            background-color: var(--secondary-light);
+            color: var(--secondary-color);
+        }
+
+        .info-note {
+            background-color: var(--warning-light);
+            border-left: 4px solid var(--warning-color);
+            padding: 12px 16px;
+            border-radius: 0 8px 8px 0;
+            font-size: 9.5pt;
+            color: #92400e;
+            margin-top: 16px;
+        }
+
+        .label-unit {
+            font-size: 8.5pt;
+            color: var(--text-muted);
+            display: block;
+            margin-top: 2px;
+        }
+
+        @media (max-width: 768px) {
+            th, td {
+                padding: 8px;
+                font-size: 9.5pt;
+            }
+            .results-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>長期収載品 特別の料金（選定療養）シミュレーター</h1>
+        <p>令和8年6月からの「制度改定（2分の1相当）」に対応。旧制度（4分の1試算）との比較を行います。</p>
+    </header>
+
+    <!-- 入力カード -->
+    <div class="card">
+        <div class="card-title">
+            <span>対象薬剤の入力</span>
+            <div class="button-group">
+                <button type="button" class="btn btn-info" onclick="loadSampleData()">サンプルで計算</button>
+                <button type="button" class="btn btn-secondary" onclick="addRow()">＋ 薬剤を追加</button>
+            </div>
+        </div>
+        
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 18%;">薬剤名（任意）</th>
+                        <th style="width: 12%;">区分</th>
+                        <th style="width: 15%;">先発薬 価格 <span class="label-unit">(円)</span></th>
+                        <th style="width: 15%;">後発薬 最高価格 <span class="label-unit">(円)</span></th>
+                        <th style="width: 14%;">1日量 <span class="label-unit">(内服のみ)</span></th>
+                        <th style="width: 14%;">日数 / 全数量</th>
+                        <th style="width: 12%;">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="drug-tbody">
+                    <!-- JSで動的に行を追加 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 結果カード -->
+    <div class="card">
+        <div class="card-title">計算結果サマリー</div>
+        
+        <div class="results-grid">
+            <div class="result-box">
+                <div class="result-label">旧制度（1/4試算）の最終金額</div>
+                <div class="result-value" id="total-old">¥0</div>
+            </div>
+            <div class="result-box highlight">
+                <div class="result-label">現行制度（1/2相当）の最終金額</div>
+                <div class="result-value" id="total-current">¥0</div>
+            </div>
+            <div class="result-box warning">
+                <div class="result-label">最終金額の差（現行 − 旧）</div>
+                <div class="result-value" id="total-diff">¥0</div>
+            </div>
+            <div class="result-box" style="display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                <div class="result-label" style="margin-bottom: 8px;">金額の差の有無</div>
+                <div id="status-badge-container">
+                    <span class="status-badge no-diff">なし</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-note">
+            ※ 内服薬の価格差は「1錠・1単位あたり」として計算されます。1日当たり複数錠服用する場合は「1日量」にその数量を入力してください。<br>
+            ※ 外用薬の場合、「1日量」は計算の対象外（入力不可）となり、処方された「全数量」に対して一括して端数処理（点数化）を行います。
+        </div>
+    </div>
+</div>
+
+<script>
+    // サンプルデータ（リーフレットの例に沿ったデータ）
+    const sampleData = [
+        { name: 'サンプル内服薬 (例1相当)', type: 'internal', targetPrice: 100.00, genericPrice: 60.00, dayQty: 1, qty: 30 },
+        { name: 'サンプル外用テープ (例4相当)', type: 'external', targetPrice: 26.60, genericPrice: 25.70, dayQty: '', qty: 35 }
+    ];
+
+    // 点数化ルール（15円以下=1点、15円超〜25円以下=2点、25円超〜35円以下=3点...）
+    function calculatePoints(amount) {
+        if (amount <= 0) return 0;
+        if (amount <= 15) return 1;
+        return Math.ceil((amount - 15) / 10) + 1;
+    }
+
+    // 行を追加する関数
+    function addRow(data = { name: '', type: 'internal', targetPrice: '', genericPrice: '', dayQty: 1, qty: '' }) {
+        const tbody = document.getElementById('drug-tbody');
+        const rowId = 'row_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        
+        const tr = document.createElement('tr');
+        tr.id = rowId;
+        
+        const isExternal = data.type === 'external';
+        
+        tr.innerHTML = `
+            <td>
+                <input type="text" class="drug-name" value="${data.name}" placeholder="お薬名など">
+            </td>
+            <td>
+                <select class="drug-type" onchange="toggleFields(this); calculate();">
+                    <option value="internal" ${data.type === 'internal' ? 'selected' : ''}>内服薬</option>
+                    <option value="external" ${isExternal ? 'selected' : ''}>外用薬</option>
+                </select>
+            </td>
+            <td>
+                <input type="number" class="price-target" value="${data.targetPrice}" step="0.01" min="0" placeholder="0" oninput="calculate()">
+            </td>
+            <td>
+                <input type="number" class="price-generic" value="${data.genericPrice}" step="0.01" min="0" placeholder="0" oninput="calculate()">
+            </td>
+            <td>
+                <input type="number" class="drug-day-qty" value="${isExternal ? '' : data.dayQty}" min="0.1" step="any" placeholder="1" ${isExternal ? 'disabled' : ''} oninput="calculate()">
+                <span class="label-unit day-qty-unit-text">${isExternal ? '---' : '1日量 (錠等)'}</span>
+            </td>
+            <td>
+                <input type="number" class="drug-qty" value="${data.qty}" min="1" placeholder="30" oninput="calculate()">
+                <span class="label-unit type-unit-text">${isExternal ? '全数量 (枚/本/g)' : '処方日数 (日)'}</span>
+            </td>
+            <td>
+                <button type="button" class="btn btn-danger" onclick="removeRow('${rowId}')">削除</button>
+            </td>
+        `;
+        
+        tbody.appendChild(tr);
+        calculate();
+    }
+
+    // 行を削除する関数
+    function removeRow(rowId) {
+        const row = document.getElementById(rowId);
+        if (row) {
+            row.remove();
+        }
+        calculate();
+    }
+
+    // 内服/外用切り替え時に入力制御とラベルを更新
+    function toggleFields(selectElement) {
+        const row = selectElement.closest('tr');
+        const dayQtyInput = row.querySelector('.drug-day-qty');
+        const dayQtyUnit = row.querySelector('.day-qty-unit-text');
+        const qtyUnit = row.querySelector('.type-unit-text');
+        
+        if (selectElement.value === 'internal') {
+            dayQtyInput.disabled = false;
+            if(!dayQtyInput.value) dayQtyInput.value = '1';
+            dayQtyUnit.textContent = '1日量 (錠等)';
+            qtyUnit.textContent = '処方日数 (日)';
+        } else {
+            dayQtyInput.disabled = true;
+            dayQtyInput.value = '';
+            dayQtyUnit.textContent = '---';
+            qtyUnit.textContent = '全数量 (枚/本/g)';
+        }
+    }
+
+    // サンプルデータを読み込んで追加する関数
+    function loadSampleData() {
+        // 現在の入力行をすべてリセット
+        document.getElementById('drug-tbody').innerHTML = '';
+        // サンプルデータを投入
+        sampleData.forEach(data => addRow(data));
+    }
+
+    // 主な計算ロジック
+    function calculate() {
+        const rows = document.querySelectorAll('#drug-tbody tr');
+        let totalPointsOld = 0;
+        let totalPointsCurrent = 0;
+
+        rows.forEach(row => {
+            const type = row.querySelector('.drug-type').value;
+            const targetPrice = parseFloat(row.querySelector('.price-target').value) || 0;
+            const genericPrice = parseFloat(row.querySelector('.price-generic').value) || 0;
+            const qty = parseFloat(row.querySelector('.drug-qty').value) || 0;
+
+            if (targetPrice <= genericPrice || qty <= 0) {
+                return;
+            }
+
+            const basePriceDiff = targetPrice - genericPrice;
+
+            if (type === 'internal') {
+                const dayQty = parseFloat(row.querySelector('.drug-day-qty').value) || 1;
+                const priceDiffPerDay = basePriceDiff * dayQty;
+
+                const oldAmountPerDay = priceDiffPerDay * 0.25;
+                const currentAmountPerDay = priceDiffPerDay * 0.50;
+
+                const pointsPerDayOld = calculatePoints(oldAmountPerDay);
+                const pointsPerDayCurrent = calculatePoints(currentAmountPerDay);
+
+                totalPointsOld += pointsPerDayOld * qty;
+                totalPointsCurrent += pointsPerDayCurrent * qty;
+            } else {
+                const oldTotalAmount = basePriceDiff * 0.25 * qty;
+                const currentTotalAmount = basePriceDiff * 0.50 * qty;
+
+                totalPointsOld += calculatePoints(oldTotalAmount);
+                totalPointsCurrent += calculatePoints(currentTotalAmount);
+            }
+        });
+
+        const finalPriceOld = totalPointsOld * 11;
+        const finalPriceCurrent = totalPointsCurrent * 11;
+        const diffPrice = finalPriceCurrent - finalPriceOld;
+
+        document.getElementById('total-old').textContent = '¥' + finalPriceOld.toLocaleString();
+        document.getElementById('total-current').textContent = '¥' + finalPriceCurrent.toLocaleString();
+        document.getElementById('total-diff').textContent = '¥' + diffPrice.toLocaleString();
+
+        const badgeContainer = document.getElementById('status-badge-container');
+        if (diffPrice > 0) {
+            document.getElementById('total-diff').classList.add('diff-active');
+            badgeContainer.innerHTML = '<span class="status-badge has-diff">あり</span>';
+        } else {
+            document.getElementById('total-diff').classList.remove('diff-active');
+            badgeContainer.innerHTML = '<span class="status-badge no-diff">なし</span>';
+        }
+    }
+
+    // 起動時は何も行を追加しない（空の状態）
+    window.onload = function() {
+        calculate();
+    };
+</script>
+
+</body>
+</html>
